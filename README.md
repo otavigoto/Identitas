@@ -1,3 +1,11 @@
+#Alunos no projeto
+Otávio...
+Nicolas...
+Bruno...
+Henrique...
+Juliano...
+
+
 # 🎓 Identitas | Sistema de Presença por NFC
 
 ![Flutter](https://img.shields.io/badge/Mobile-Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)
@@ -86,12 +94,3 @@ Um sistema integrado de validação de presença baseado em tecnologia NFC (13,5
 4. O app lê o *UID* do cartão e envia via requisição HTTP para a API NestJS.
 5. A API cruza os dados com o MongoDB, confirma a matrícula, salva o log e retorna o status.
 6. O professor recebe um feedback visual/sonoro imediato de sucesso ou falha.
-
----
-
-## 👨‍💻 Autor
-
-**Otávio Augusto Antunes Marquez**
-*Graduando em Engenharia de Software | PUC-Campinas*
-
-Projeto acadêmico focado em inovação, integridade e impacto social.
