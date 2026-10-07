@@ -1,0 +1,31 @@
+# Dependências
+node_modules/
+
+# Compilação e cache
+dist/
+build/
+*.tsbuildinfo
+.eslintcache
+.npm/
+
+# Testes
+coverage/
+.nyc_output/
+
+# Logs
+logs/
+*.log
+
+# Variáveis de ambiente e segredos
+.env
+.env.*
+!.env.example
+
+# Arquivos locais de editores
+.idea/
+.vscode/
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+Desktop.ini
