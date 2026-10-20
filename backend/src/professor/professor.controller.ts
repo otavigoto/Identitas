@@ -1,13 +1,38 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  ValidationPipe,
+  UsePipes,
+  Inject,
+  UseGuards,
+} from '@nestjs/common';
+import { AdminGuard } from '../auth/admin.guard.js';
 import { ProfessorService } from './professor.service.js';
 import { CreateProfessorDto } from './dto/create-professor.dto.js';
 import { UpdateProfessorDto } from './dto/update-professor.dto.js';
 
 @Controller('professor')
 export class ProfessorController {
-  constructor(private readonly professorService: ProfessorService) {}
+  constructor(
+    @Inject(ProfessorService)
+    private readonly professorService: ProfessorService,
+  ) {}
 
   @Post()
+  @UseGuards(AdminGuard)
+  @UsePipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      expectedType: CreateProfessorDto,
+    }),
+  )
   create(@Body() createProfessorDto: CreateProfessorDto) {
     return this.professorService.create(createProfessorDto);
   }
@@ -23,7 +48,10 @@ export class ProfessorController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateProfessorDto: UpdateProfessorDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateProfessorDto: UpdateProfessorDto,
+  ) {
     return this.professorService.update(+id, updateProfessorDto);
   }
 

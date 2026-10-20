@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "admin:setup": "node scripts/setup-admin.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -35,7 +36,8 @@
     "dotenv": "^18.0.8",
     "mongoose": "^9.11.2",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "@nestjs/jwt": "^12.0.3"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",
