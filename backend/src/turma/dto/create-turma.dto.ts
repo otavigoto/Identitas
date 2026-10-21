@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, IsArray } from 'class-validator';
 
 export class CreateTurmaDto {
   @IsString({ message: 'O nome deve ser um texto' })
@@ -17,9 +17,10 @@ export class CreateTurmaDto {
   @IsNotEmpty({ message: 'O nome do professor não pode ficar em branco' })
   professor: string;
 
-  @IsString({ message: 'A lista de alunos deve ser um texto' })
+  @IsArray({ message: 'A lista de alunos deve ser uma Lista' })
+  @IsString({each: true, message: 'Precisa ser strings'})
   @IsNotEmpty({ message: 'A lista de alunos não pode ficar em branco' })
-  listaAlunos: string;
+  listaAlunos: Array<string>;
 
 
 }
