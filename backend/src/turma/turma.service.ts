@@ -1,9 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { CreateTurmaDto } from './dto/create-turma.dto';
-import { UpdateTurmaDto } from './dto/update-turma.dto';
-import { Turma, TurmaDocument } from './schema/turma.schema';
+import { CreateTurmaDto } from './dto/create-turma.dto.js';
+import { UpdateTurmaDto } from './dto/update-turma.dto.js';
+import { Turma, TurmaDocument } from './schema/turma.schema.js';
 
 @Injectable()
 export class TurmaService {
