@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
+import { CreateAlunoDto } from '../../aluno/dto/create-aluno.dto.js';
 
 export type TurmaDocument = HydratedDocument<Turma>;
 
@@ -14,6 +15,12 @@ export class Turma {
 
   @Prop({ required: true })
   semestre: string;
+
+  @Prop({ required: true})
+  id_professor: string;
+
+  @Prop({ required: true})
+  listaAlunos: string;
 }
 
 export const TurmaSchema = SchemaFactory.createForClass(Turma);

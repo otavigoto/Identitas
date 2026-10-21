@@ -12,4 +12,14 @@ export class CreateTurmaDto {
   @IsString({ message: 'O semestre deve ser um texto' })
   @IsNotEmpty({ message: 'O semestre não pode ficar em branco' })
   semestre: string;
+
+  @IsString({ message: 'O nome do professor deve ser um texto' })
+  @IsNotEmpty({ message: 'O nome do professor não pode ficar em branco' })
+  professor: string;
+
+  @IsString({ message: 'A lista de alunos deve ser um texto' })
+  @IsNotEmpty({ message: 'A lista de alunos não pode ficar em branco' })
+  listaAlunos: string;
+
+
 }
