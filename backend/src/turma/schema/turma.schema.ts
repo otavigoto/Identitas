@@ -20,7 +20,7 @@ export class Turma {
   id_professor: string;
 
   @Prop({ required: true})
-  listaAlunos: string;
+  listaAlunos: Array<string>;
 }
 
 export const TurmaSchema = SchemaFactory.createForClass(Turma);
