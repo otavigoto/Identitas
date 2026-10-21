@@ -1,26 +1,48 @@
-import { Injectable } from '@nestjs/common';
-import { CreateTurmaDto } from './dto/create-turma.dto.js';
-import { UpdateTurmaDto } from './dto/update-turma.dto.js';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { CreateTurmaDto } from './dto/create-turma.dto';
+import { UpdateTurmaDto } from './dto/update-turma.dto';
+import { Turma, TurmaDocument } from './schema/turma.schema';
 
 @Injectable()
 export class TurmaService {
-  create(createTurmaDto: CreateTurmaDto) {
-    return 'This action adds a new turma';
+  constructor(
+    @InjectModel(Turma.name) private turmaModel: Model<TurmaDocument>,
+  ) {}
+
+  async create(createTurmaDto: CreateTurmaDto): Promise<Turma> {
+    const novaTurma = new this.turmaModel(createTurmaDto);
+    return novaTurma.save();
   }
 
-  findAll() {
-    return `This action returns all turma`;
+  async findAll(): Promise<Turma[]> {
+    return this.turmaModel.find().exec();
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} turma`;
+  async findOne(id: string): Promise<Turma> {
+    const turma = await this.turmaModel.findById(id).exec();
+    if (!turma) {
+      throw new NotFoundException(`Turma com ID #${id} não encontrada`);
+    }
+    return turma;
   }
 
-  update(id: number, updateTurmaDto: UpdateTurmaDto) {
-    return `This action updates a #${id} turma`;
+  async update(id: string, updateTurmaDto: UpdateTurmaDto): Promise<Turma> {
+    const turmaAtualizada = await this.turmaModel
+      .findByIdAndUpdate(id, updateTurmaDto, { new: true })
+      .exec();
+    if (!turmaAtualizada) {
+      throw new NotFoundException(`Turma com ID #${id} não encontrada`);
+    }
+    return turmaAtualizada;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} turma`;
+  async remove(id: string): Promise<Turma> {
+    const turmaRemovida = await this.turmaModel.findByIdAndDelete(id).exec();
+    if (!turmaRemovida) {
+      throw new NotFoundException(`Turma com ID #${id} não encontrada`);
+    }
+    return turmaRemovida;
   }
 }
