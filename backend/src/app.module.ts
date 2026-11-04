@@ -1,17 +1,11 @@
 import { Module } from '@nestjs/common';
 //import { createObserveModule } from '@nestjs/observe';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
-import { ProfessorModule } from './professor/professor.module.js';
-import { AlunoModule } from './aluno/aluno.module.js';
-import { TurmaModule } from './turma/turma.module.js';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
+import { ClassesModule } from './classes/classes.module.js';
 
 
 //export const { ObserveModule, ObserveInstrument } = createObserveModule();
-
-console.log(process.env.MONGODB);
 
 @Module({
   imports: [
@@ -28,11 +22,7 @@ console.log(process.env.MONGODB);
       serviceId: 'backend',
     }),
     */
-    ProfessorModule,
-    AlunoModule,
-    TurmaModule,
+    ClassesModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}
