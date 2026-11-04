@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
+import { ClassesModule } from './classes/classes.module.js';
 import { AuthorizationModule } from './modules/auth/authorization.module.js';
 
 @Module({
@@ -9,6 +10,7 @@ import { AuthorizationModule } from './modules/auth/authorization.module.js';
       isGlobal: true,
     }),
     MongooseModule.forRoot(process.env.MONGODB ?? ''),
+    ClassesModule,
     AuthorizationModule,
   ],
 })
