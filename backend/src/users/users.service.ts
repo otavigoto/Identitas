@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 import { InjectModel } from '@nestjs/mongoose';
@@ -26,5 +26,22 @@ export class UsersService {
 
   remove(id: string) {
     return this.userModel.findByIdAndRemove(id);
+  }
+
+  async assignNfcKey(id: string, nfcKey: string) {
+    const existingUser = await this.userModel.findOne({ nfcKey }).exec();
+    if (existingUser && existingUser._id.toString() !== id) {
+      throw new BadRequestException('Esta chave NFC já está cadastrada para outro usuário.');
+    }
+
+    const updatedUser = await this.userModel
+      .findByIdAndUpdate(id, { nfcKey }, { new: true })
+      .exec();
+
+    if (!updatedUser) {
+      throw new NotFoundException(`Usuário com ID ${id} não encontrado.`);
+    }
+
+    return updatedUser;
   }
 }
