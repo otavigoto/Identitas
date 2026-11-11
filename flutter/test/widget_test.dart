@@ -19,7 +19,8 @@ void main() {
 
   final identifier = find.byKey(const Key('login-identifier'));
   final password = find.byKey(const Key('login-password'));
-  const message = 'Campos válidos. Login ainda não integrado.';
+  // Título da lista de aulas, exibida após o login.
+  const message = 'Minhas aulas';
 
   testWidgets('Exibe a tela e exige os dois campos', (tester) async {
     await openLogin(tester);
@@ -51,16 +52,14 @@ void main() {
   });
 
   for (final login in ['aluno@instituicao.edu.br', '24012345']) {
-    testWidgets('Aceita $login e informa que o login não está integrado', (
-      tester,
-    ) async {
+    testWidgets('Aceita $login e abre a lista de aulas', (tester) async {
       await openLogin(tester);
       await tester.enterText(identifier, login);
       await tester.enterText(password, 'senha123');
       await tester.tap(find.text('Entrar'));
       await tester.pumpAndSettle();
       expect(find.text(message), findsOneWidget);
-      expect(find.text('Login'), findsOneWidget);
+      expect(find.text('Login'), findsNothing);
       expect(tester.testTextInput.isVisible, isFalse);
     });
   }

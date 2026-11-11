@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'turmas_page.dart';
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -26,13 +28,10 @@ class _LoginPageState extends State<LoginPage> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('Campos válidos. Login ainda não integrado.'),
-        ),
-      );
+    // TODO backend: autenticar antes de navegar.
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => const TurmasPage()));
   }
 
   InputDecoration _decoration(String hint, {Widget? suffix}) => InputDecoration(
