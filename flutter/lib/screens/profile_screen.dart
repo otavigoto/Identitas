@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import 'user_profile_card.dart';
 
 class ProfileScreen extends StatelessWidget {
