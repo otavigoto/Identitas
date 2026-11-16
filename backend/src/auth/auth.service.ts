@@ -1,7 +1,7 @@
-import { BadRequestException,  Injectable,  NotFoundException,  UnauthorizedException, } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException, } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { Role } from '../authorization/index.js';
+import { Role } from '../common/enums/role.enum.js';
 import { UsersService } from '../users/users.service.js';
 import { UpdateAuthDto } from './dto/update-auth.dto.js';
 import { ValidateAuthDto } from './dto/validate-auth.dto.js';
@@ -21,7 +21,7 @@ export class AuthService {
 
   async validateUser(validateAuthDto: ValidateAuthDto) {
     const { ra, password } = validateAuthDto;
-    const user = await this.usersService.findOne(ra);
+    const user = await this.usersService.findByRa(ra);
 
     if (!user) {
       throw new UnauthorizedException('RA ou senha inválidos.');

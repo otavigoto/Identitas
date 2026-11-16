@@ -1,11 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Req,  UseGuards, } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Req, UseGuards, } from '@nestjs/common';
 import type { Request } from 'express';
-import { Role, Roles, RolesGuard } from '../authorization/index.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
+import { Role } from '../common/enums/role.enum.js';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
 import { AuthService, type JwtPayload } from './auth.service.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { UpdateAuthDto } from './dto/update-auth.dto.js';
 import { ValidateAuthDto } from './dto/validate-auth.dto.js';
-import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 
 @Controller('auth')
 export class AuthController {

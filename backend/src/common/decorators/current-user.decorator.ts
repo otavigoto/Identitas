@@ -6,7 +6,7 @@ import {
 import type {
   AuthenticatedRequest,
   AuthenticatedUser,
-} from '../../authorization/authenticated-user.interface.js';
+} from '../../auth/interfaces/authenticated-user.interface.js';
 
 export const CurrentUser = createParamDecorator(
   (property: keyof AuthenticatedUser | undefined, context: ExecutionContext) => {

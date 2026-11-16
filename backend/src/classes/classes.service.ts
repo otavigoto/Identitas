@@ -5,8 +5,8 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isValidObjectId, Model } from 'mongoose';
-import { CreateClassDto } from './dto/create-class.dto.js';
-import { UpdateClassDto } from './dto/update-class.dto.js';
+import { CreateClassDto } from './dto/request/create-class.dto.js';
+import { UpdateClassDto } from './dto/request/update-class.dto.js';
 import { Turma, TurmaDocument } from './schemas/turma.schema.js';
 
 @Injectable()

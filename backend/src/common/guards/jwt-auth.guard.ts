@@ -1,7 +1,7 @@
-import {  CanActivate,  ExecutionContext,  Injectable,  UnauthorizedException, } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException, } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
-import type { JwtPayload } from '../auth.service.js';
+import type { JwtPayload } from '../../auth/auth.service.js';
 
 type RequestWithUser = Request & { user?: JwtPayload };
 
