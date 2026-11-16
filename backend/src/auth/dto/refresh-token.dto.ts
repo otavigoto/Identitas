@@ -1,4 +1,6 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { ValidateAuthDto } from './validate-auth.dto.js';
+import { IsString } from 'class-validator';
 
-export class UpdateAuthDto extends PartialType(ValidateAuthDto) {}
+export class RefreshTokenDto {
+  @IsString()
+  refreshToken: string;
+}
