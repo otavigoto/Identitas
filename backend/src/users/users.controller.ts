@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@n
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { Role } from '../common/enums/role.enum.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
 import { AssignNfcDto } from './dto/request/assing-nfc.dto.js';
 import { CreateUserDto } from './dto/request/create-user.dto.js';
 import { UpdateUserDto } from './dto/request/update-user.dto.js';
@@ -9,7 +10,7 @@ import { ProfileUserDto } from './dto/response/profile-user.dto.js';
 import { UsersService } from './users.service.js';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -34,7 +35,7 @@ export class UsersController {
   }
 
   @Get()
-  @Roles(Role.PROFESSOR, Role.STUDENT)
+  @Roles(Role.PROFESSOR)
   findAll() {
     return this.usersService.findAll();
   }
