@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../login_page.dart';
 import 'user_profile_card.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -8,9 +10,19 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1E1E1E),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          tooltip: 'Voltar',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -18,7 +30,7 @@ class ProfileScreen extends StatelessWidget {
                 'Meu Perfil',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 24,
+                  fontSize: 28,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -31,7 +43,13 @@ class ProfileScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    // Limpa toda a pilha de navegação e volta para a tela de Login
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const LoginPage()),
+                      (route) => false,
+                    );
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.yellowAccent,
                     shape: RoundedRectangleBorder(
@@ -48,6 +66,7 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
             ],
           ),
         ),
