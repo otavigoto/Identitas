@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'turma.dart';
 import 'turma_form_page.dart';
-import 'turmas_mock.dart';
+import 'turmas_api.dart';
 
 /// Detalhe da turma: dados, alunos matriculados, editar e excluir.
 ///
@@ -10,11 +10,13 @@ import 'turmas_mock.dart';
 class TurmaDetalhePage extends StatefulWidget {
   const TurmaDetalhePage({
     super.key,
+    required this.api,
     required this.turma,
     required this.onChanged,
     required this.onDeleted,
   });
 
+  final TurmasApi api;
   final Turma turma;
   final ValueChanged<Turma> onChanged;
   final VoidCallback onDeleted;
@@ -25,22 +27,40 @@ class TurmaDetalhePage extends StatefulWidget {
 
 class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
   late Turma _turma = widget.turma;
-
-  String _nomeAluno(String ra) {
-    for (final a in alunosMock) {
-      if (a.ra == ra) return a.nome;
-    }
-    return 'Aluno $ra';
-  }
+  bool _ocupado = false;
 
   void _atualizar(Turma nova) {
     setState(() => _turma = nova);
     widget.onChanged(nova);
   }
 
+  void _erro(Object e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(e is ApiException ? e.message : '$e')),
+      );
+  }
+
+  /// Executa uma chamada à API evitando cliques repetidos.
+  Future<void> _executar(Future<void> Function() acao) async {
+    if (_ocupado) return;
+    setState(() => _ocupado = true);
+    try {
+      await acao();
+    } on ApiException catch (e) {
+      _erro(e);
+    } finally {
+      if (mounted) setState(() => _ocupado = false);
+    }
+  }
+
   Future<void> _editar() async {
     final editada = await Navigator.of(context).push<Turma>(
-      MaterialPageRoute(builder: (_) => TurmaFormPage(turma: _turma)),
+      MaterialPageRoute(
+        builder: (_) => TurmaFormPage(api: widget.api, turma: _turma),
+      ),
     );
     if (editada != null) _atualizar(editada);
   }
@@ -65,61 +85,26 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
       ),
     );
     if (confirmar != true || !mounted) return;
-    // TODO backend: DELETE /classes/:id
-    widget.onDeleted();
-    Navigator.of(context).pop();
+    await _executar(() async {
+      await widget.api.excluir(_turma.id);
+      widget.onDeleted();
+      if (mounted) Navigator.of(context).pop();
+    });
   }
 
-  void _remover(String ra) {
-    // TODO backend: DELETE /classes/:id/students/:studentId
-    _atualizar(
-      _turma.copyWith(
-        listaAlunos: _turma.listaAlunos.where((r) => r != ra).toList(),
-      ),
-    );
-  }
+  Future<void> _remover(String alunoId) => _executar(() async {
+    _atualizar(await widget.api.removerAluno(_turma.id, alunoId));
+  });
 
   Future<void> _adicionar() async {
-    final disponiveis = alunosMock
-        .where((a) => !_turma.listaAlunos.contains(a.ra))
-        .toList();
-    final escolhido = await showModalBottomSheet<Aluno>(
+    final alunoId = await showDialog<String>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: disponiveis.isEmpty
-            ? const Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('Todos os alunos já estão na turma.'),
-              )
-            : ListView(
-                shrinkWrap: true,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(24, 16, 24, 8),
-                    child: Text(
-                      'Adicionar aluno',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -1,
-                      ),
-                    ),
-                  ),
-                  for (final a in disponiveis)
-                    ListTile(
-                      title: Text(a.nome),
-                      subtitle: Text('RA ${a.ra}'),
-                      onTap: () => Navigator.pop(ctx, a),
-                    ),
-                ],
-              ),
-      ),
+      builder: (_) => const _AlunoDialog(),
     );
-    if (escolhido == null) return;
-    // TODO backend: POST /classes/:id/students  { alunoId }
-    _atualizar(
-      _turma.copyWith(listaAlunos: [..._turma.listaAlunos, escolhido.ra]),
-    );
+    if (alunoId == null || alunoId.isEmpty) return;
+    await _executar(() async {
+      _atualizar(await widget.api.adicionarAluno(_turma.id, alunoId));
+    });
   }
 
   @override
@@ -135,15 +120,21 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
           color: Color(0xFF1E1E1E),
         ),
       ),
+      bottom: _ocupado
+          ? const PreferredSize(
+              preferredSize: Size.fromHeight(2),
+              child: LinearProgressIndicator(minHeight: 2),
+            )
+          : null,
       actions: [
         IconButton(
           tooltip: 'Editar aula',
-          onPressed: _editar,
+          onPressed: _ocupado ? null : _editar,
           icon: const Icon(Icons.edit_outlined),
         ),
         IconButton(
           tooltip: 'Excluir aula',
-          onPressed: _excluir,
+          onPressed: _ocupado ? null : _excluir,
           icon: const Icon(Icons.delete_outline),
         ),
       ],
@@ -195,7 +186,7 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
               ),
               FilledButton.icon(
                 key: const Key('adicionar-aluno'),
-                onPressed: _adicionar,
+                onPressed: _ocupado ? null : _adicionar,
                 icon: const Icon(Icons.person_add_alt, size: 18),
                 label: const Text('Adicionar'),
                 style: FilledButton.styleFrom(
@@ -213,19 +204,60 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
               child: Center(child: Text('Nenhum aluno matriculado.')),
             )
           else
-            for (final ra in _turma.listaAlunos)
+            for (final aluno in _turma.listaAlunos)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text(_nomeAluno(ra)),
-                subtitle: Text('RA $ra'),
+                title: Text('Aluno $aluno'),
                 trailing: IconButton(
-                  tooltip: 'Remover ${_nomeAluno(ra)}',
-                  onPressed: () => _remover(ra),
+                  tooltip: 'Remover $aluno',
+                  onPressed: _ocupado ? null : () => _remover(aluno),
                   icon: const Icon(Icons.remove_circle_outline),
                 ),
               ),
         ],
       ),
     ),
+  );
+}
+
+/// Pede o RA/ID do aluno. Tem o próprio controller para ele ser descartado
+/// só depois da animação de saída do diálogo.
+class _AlunoDialog extends StatefulWidget {
+  const _AlunoDialog();
+
+  @override
+  State<_AlunoDialog> createState() => _AlunoDialogState();
+}
+
+class _AlunoDialogState extends State<_AlunoDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Adicionar aluno'),
+    content: TextField(
+      key: const Key('aluno-id'),
+      controller: _controller,
+      autofocus: true,
+      decoration: const InputDecoration(hintText: 'RA ou ID do aluno'),
+      onSubmitted: (v) => Navigator.pop(context, v.trim()),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancelar'),
+      ),
+      TextButton(
+        key: const Key('confirmar-aluno'),
+        onPressed: () => Navigator.pop(context, _controller.text.trim()),
+        child: const Text('Adicionar'),
+      ),
+    ],
   );
 }
