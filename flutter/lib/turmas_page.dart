@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'screens/profile_screen.dart';
 import 'turma.dart';
 import 'turma_detalhe_page.dart';
 import 'turma_form_page.dart';
@@ -75,6 +76,21 @@ class _TurmasPageState extends State<TurmasPage> {
             color: Color(0xFF1E1E1E),
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Meu Perfil',
+            icon: const Icon(
+              Icons.account_circle_outlined,
+              color: Color(0xFF1E1E1E),
+              size: 28,
+            ),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         key: const Key('nova-aula'),
