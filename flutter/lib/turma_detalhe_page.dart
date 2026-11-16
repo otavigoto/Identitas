@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'screens/nfc_instrucao_page.dart';
+import 'screens/nfc_scaffold.dart';
+import 'services/nfc_service.dart';
 import 'turma.dart';
 import 'turma_form_page.dart';
 import 'turmas_api.dart';
@@ -14,12 +17,14 @@ class TurmaDetalhePage extends StatefulWidget {
     required this.turma,
     required this.onChanged,
     required this.onDeleted,
+    this.nfcService,
   });
 
   final TurmasApi api;
   final Turma turma;
   final ValueChanged<Turma> onChanged;
   final VoidCallback onDeleted;
+  final NfcService? nfcService;
 
   @override
   State<TurmaDetalhePage> createState() => _TurmaDetalhePageState();
@@ -107,6 +112,22 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
     });
   }
 
+  void _validarPresenca() {
+    Navigator.of(context).push(
+      nfcRoute(
+        NfcInstrucaoPage(
+          nomeDisciplina: _turma.disciplina,
+          nfcService: widget.nfcService,
+          onValidarPresenca: (_) async {
+            throw Exception(
+              'A validação de presença ainda não está conectada ao servidor.',
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -169,6 +190,18 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
                   style: const TextStyle(fontSize: 14, color: Colors.black54),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            key: const Key('validar-presenca'),
+            onPressed: _validarPresenca,
+            icon: const Icon(Icons.contactless),
+            label: const Text('Validar presença por NFC'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF1E1E1E),
+              foregroundColor: Colors.white,
+              shape: const StadiumBorder(),
             ),
           ),
           const SizedBox(height: 24),
