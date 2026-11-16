@@ -11,6 +11,8 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+  // Necessário para o Flutter web (outra origem). TODO: restringir em produção.
+  app.enableCors();
   await app.listen(process.env.PORT ?? 3000);
 }
 void bootstrap();

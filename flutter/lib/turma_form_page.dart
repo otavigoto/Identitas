@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'turma.dart';
-import 'turmas_mock.dart';
+import 'turmas_api.dart';
 
-/// Cria ou edita uma turma e devolve o resultado via `Navigator.pop`.
+/// Cria ou edita uma turma no backend e devolve o resultado via `pop`.
 class TurmaFormPage extends StatefulWidget {
-  const TurmaFormPage({super.key, this.turma});
+  const TurmaFormPage({super.key, required this.api, this.turma});
+
+  final TurmasApi api;
 
   /// Null = criar nova turma.
   final Turma? turma;
@@ -22,6 +24,8 @@ class _TurmaFormPageState extends State<TurmaFormPage> {
   );
   late final _semestre = TextEditingController(text: widget.turma?.semestre);
 
+  bool _salvando = false;
+
   bool get _editando => widget.turma != null;
 
   @override
@@ -32,24 +36,34 @@ class _TurmaFormPageState extends State<TurmaFormPage> {
     super.dispose();
   }
 
-  void _salvar() {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _salvar() async {
+    if (_salvando || !_formKey.currentState!.validate()) return;
     final atual = widget.turma;
-    // TODO backend: POST /classes (criar) ou PATCH /classes/:id (editar).
-    final resultado = atual == null
-        ? Turma(
-            id: DateTime.now().microsecondsSinceEpoch.toString(),
-            nome: _nome.text.trim(),
-            disciplina: _disciplina.text.trim(),
-            semestre: _semestre.text.trim(),
-            idProfessor: professorMockId,
-          )
-        : atual.copyWith(
-            nome: _nome.text.trim(),
-            disciplina: _disciplina.text.trim(),
-            semestre: _semestre.text.trim(),
-          );
-    Navigator.of(context).pop(resultado);
+    final nome = _nome.text.trim();
+    final disciplina = _disciplina.text.trim();
+    final semestre = _semestre.text.trim();
+    setState(() => _salvando = true);
+    try {
+      final resultado = atual == null
+          ? await widget.api.criar(
+              nome: nome,
+              disciplina: disciplina,
+              semestre: semestre,
+            )
+          : await widget.api.atualizar(
+              atual.id,
+              nome: nome,
+              disciplina: disciplina,
+              semestre: semestre,
+            );
+      if (mounted) Navigator.of(context).pop(resultado);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _salvando = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   String? _obrigatorio(String? v, String campo) =>
@@ -179,7 +193,7 @@ class _TurmaFormPageState extends State<TurmaFormPage> {
                   height: 51,
                   child: FilledButton(
                     key: const Key('turma-salvar'),
-                    onPressed: _salvar,
+                    onPressed: _salvando ? null : _salvar,
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF1E1E1E),
                       foregroundColor: Colors.white,
@@ -190,7 +204,12 @@ class _TurmaFormPageState extends State<TurmaFormPage> {
                         letterSpacing: -1.4,
                       ),
                     ),
-                    child: const Text('Salvar'),
+                    child: _salvando
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Salvar'),
                   ),
                 ),
               ),
