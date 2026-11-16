@@ -9,33 +9,24 @@ class Turma {
     this.listaAlunos = const [],
   });
 
+  factory Turma.fromJson(Map<String, dynamic> json) => Turma(
+    id: json['_id'] as String,
+    nome: json['nome'] as String,
+    disciplina: json['disciplina'] as String,
+    semestre: json['semestre'] as String,
+    idProfessor: json['id_professor'] as String,
+    listaAlunos: [
+      for (final a in (json['listaAlunos'] as List<dynamic>? ?? const []))
+        a as String,
+    ],
+  );
+
   final String id;
   final String nome;
   final String disciplina;
   final String semestre;
   final String idProfessor;
 
-  /// RAs dos alunos matriculados.
+  /// Identificadores dos alunos matriculados (como guardados no MongoDB).
   final List<String> listaAlunos;
-
-  Turma copyWith({
-    String? nome,
-    String? disciplina,
-    String? semestre,
-    List<String>? listaAlunos,
-  }) => Turma(
-    id: id,
-    nome: nome ?? this.nome,
-    disciplina: disciplina ?? this.disciplina,
-    semestre: semestre ?? this.semestre,
-    idProfessor: idProfessor,
-    listaAlunos: listaAlunos ?? this.listaAlunos,
-  );
-}
-
-class Aluno {
-  const Aluno({required this.ra, required this.nome});
-
-  final String ra;
-  final String nome;
 }

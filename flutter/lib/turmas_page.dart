@@ -1,24 +1,50 @@
 import 'package:flutter/material.dart';
 
 import 'screens/profile_screen.dart';
+import 'services/nfc_service.dart';
 import 'turma.dart';
 import 'turma_detalhe_page.dart';
 import 'turma_form_page.dart';
-import 'turmas_mock.dart';
+import 'turmas_api.dart';
 
 /// Lista de aulas (turmas) do professor, com busca e filtro por semestre.
 class TurmasPage extends StatefulWidget {
-  const TurmasPage({super.key});
+  const TurmasPage({super.key, this.nfcService});
+
+  final NfcService? nfcService;
 
   @override
   State<TurmasPage> createState() => _TurmasPageState();
 }
 
 class _TurmasPageState extends State<TurmasPage> {
-  // TODO backend: carregar com GET /classes/teacher/:teacherId
-  List<Turma> _turmas = criarTurmasMock();
+  late final TurmasApi _api = widget.api ?? TurmasApi();
+  List<Turma> _turmas = [];
+  bool _carregando = true;
+  String? _erro;
   String _busca = '';
   String? _semestre;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregar();
+  }
+
+  Future<void> _carregar() async {
+    setState(() {
+      _carregando = true;
+      _erro = null;
+    });
+    try {
+      final turmas = await _api.listar();
+      if (mounted) setState(() => _turmas = turmas);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _erro = e.message);
+    } finally {
+      if (mounted) setState(() => _carregando = false);
+    }
+  }
 
   List<String> get _semestres =>
       (_turmas.map((t) => t.semestre).toSet().toList()..sort()).reversed
@@ -45,16 +71,20 @@ class _TurmasPageState extends State<TurmasPage> {
   Future<void> _nova() async {
     final criada = await Navigator.of(
       context,
-    ).push<Turma>(MaterialPageRoute(builder: (_) => const TurmaFormPage()));
+    ).push<Turma>(
+      MaterialPageRoute(builder: (_) => TurmaFormPage(api: _api)),
+    );
     if (criada != null) setState(() => _turmas = [..._turmas, criada]);
   }
 
   void _abrir(Turma turma) => Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => TurmaDetalhePage(
+        api: _api,
         turma: turma,
         onChanged: _atualizar,
         onDeleted: () => _remover(turma),
+        nfcService: widget.nfcService,
       ),
     ),
   );
@@ -144,7 +174,27 @@ class _TurmasPageState extends State<TurmasPage> {
               ),
             ),
             Expanded(
-              child: lista.isEmpty
+              child: _carregando
+                  ? const Center(child: CircularProgressIndicator())
+                  : _erro != null
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_erro!, textAlign: TextAlign.center),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              key: const Key('tentar-novamente'),
+                              onPressed: _carregar,
+                              child: const Text('Tentar novamente'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : lista.isEmpty
                   ? const Center(child: Text('Nenhuma aula encontrada.'))
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(24, 8, 24, 96),

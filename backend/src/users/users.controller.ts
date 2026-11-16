@@ -1,19 +1,36 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Roles } from '../common/decorators/roles.decorator.js';
+import { Role } from '../common/enums/role.enum.js';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { AssignNfcDto } from './dto/request/assing-nfc.dto.js';
+import { CreateUserDto } from './dto/request/create-user.dto.js';
+import { UpdateUserDto } from './dto/request/update-user.dto.js';
+import { ProfileUserDto } from './dto/response/profile-user.dto.js';
 import { UsersService } from './users.service.js';
-import { CreateUserDto } from './dto/create-user.dto.js';
-import { UpdateUserDto } from './dto/update-user.dto.js';
-import { AssignNfcDto } from './dto/assing-nfc.dto.js';
-import { Role, Roles, RolesGuard } from '../authorization/index.js';
 
 @Controller('users')
-@UseGuards(RolesGuard)
+@UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  // CRUD USERS -----------------------
+
   @Post()
-  @Roles(Role.PROFESSOR, Role.STUDENT)
+  @Roles(Role.PROFESSOR)
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
+  }
+
+  @Patch(':id')
+  @Roles(Role.PROFESSOR, Role.STUDENT)
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(id, updateUserDto);
+  }
+
+  @Delete(':id')
+  @Roles(Role.PROFESSOR, Role.STUDENT)
+  remove(@Param('id') id: string) {
+    return this.usersService.remove(id);
   }
 
   @Get()
@@ -28,16 +45,15 @@ export class UsersController {
     return this.usersService.findOne(id);
   }
 
-  @Patch(':id')
-  @Roles(Role.PROFESSOR, Role.STUDENT)
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
-  }
+  // FIM CRUD USERS -----------------------
 
-  @Delete(':id')
+
+  
+
+  @Get('profile/:id')
   @Roles(Role.PROFESSOR, Role.STUDENT)
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
+  findProfile(@Param('id') id: string) {
+    return this.usersService.findOne(id) as ProfileUserDto;
   }
 
   @Patch(':id/nfc')
