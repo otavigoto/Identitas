@@ -1,5 +1,8 @@
 import {Prop, Schema, SchemaFactory} from '@nestjs/mongoose';
 import { Role} from "../../common/enums/role.enum.js";
+import { Document } from 'mongoose';
+
+export type UserDocument = User & Document;
 
 @Schema( {timestamps: true})
 export class User {

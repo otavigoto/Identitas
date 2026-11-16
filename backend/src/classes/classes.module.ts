@@ -2,11 +2,15 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ClassesService } from './classes.service.js';
 import { ClassesController } from './classes.controller.js';
-import { Turma, TurmaSchema } from './schemas/turma.schema.js';
+import { Class, ClassSchema } from './entities/class.entity.js';
+import { User, UserSchema } from '../users/entities/user.entity.js'; // Ajuste o caminho
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Turma.name, schema: TurmaSchema }]),
+    MongooseModule.forFeature([
+      { name: Class.name, schema: ClassSchema },
+      { name: User.name, schema: UserSchema },
+    ]),
   ],
   controllers: [ClassesController],
   providers: [ClassesService],

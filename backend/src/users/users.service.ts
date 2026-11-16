@@ -51,14 +51,14 @@ export class UsersService {
     return user;
   }
 
-  async assignNfcKey(id: string, nfcKey: string) {
-    const existingUser = await this.userModel.findOne({ nfcKey }).exec();
+  async assignNfcKey(id: string, nfcUid: string) {
+    const existingUser = await this.userModel.findOne({ nfcUid }).exec();
     if (existingUser && existingUser._id.toString() !== id) {
       throw new BadRequestException('Esta chave NFC já está cadastrada para outro usuário.');
     }
 
     const updatedUser = await this.userModel
-      .findByIdAndUpdate(id, { nfcKey }, { new: true })
+      .findByIdAndUpdate(id, { nfcUid }, { new: true })
       .exec();
 
     if (!updatedUser) {
