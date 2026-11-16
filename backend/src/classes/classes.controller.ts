@@ -53,6 +53,13 @@ export class ClassesController {
 
   // FIM CRUD CLASSES -----------------------
 
+  @Get('student/:studentId/today')
+  findTodayClassesByStudent(
+    @Param('studentId') studentId: string,
+    @Query('date') date?: string, // Opcional: permite testar passando ?date=2026-11-16
+  ) {
+    return this.classesService.findTodayClassesByStudent(studentId, date);
+  }
 
   @Get('teacher/:teacherId')
   findByTeacher(@Param('teacherId') teacherId: string) {
@@ -83,10 +90,6 @@ export class ClassesController {
   ) {
     return this.classesService.removeStudent(id, [studentId]);
   }
-
-
-
-
 
   // Funções de presença -----------------------
 

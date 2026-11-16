@@ -50,48 +50,15 @@ export class ClassesService {
     });
   }
 
-  async findAll(
-    week?: string,
-    attendanceStatus?: string,
-  ): Promise<ClassDocument[]> {
-    const filters: Record<string, string> = {};
-
-    if (week) {
-      filters.week = week;
-    }
-
-    if (attendanceStatus) {
-      filters.attendanceStatus = attendanceStatus;
-    }
-
-    return this.classModel.find(filters).sort({ name: 1 }).exec();
-  }
-
-  async findByTeacher(teacherId: string): Promise<ClassDocument[]> {
-    this.validateReference(teacherId, 'Professor');
-    return this.classModel
-      .find({ id_professor: teacherId })
-      .sort({ name: 1 })
-      .exec();
-  }
-
-  async findByStudent(studentId: string): Promise<ClassDocument[]> {
-    this.validateReference(studentId, 'Aluno');
-    return this.classModel
-      .find({ enrolledStudents: studentId })
-      .sort({ name: 1 })
-      .exec();
-  }
-
-  async findOne(id: string): Promise<ClassDocument> {
+  async remove(id: string): Promise<ClassDocument> {
     this.validateClassId(id);
-    const foundClass = await this.classModel.findById(id).exec();
+    const deletedClass = await this.classModel.findByIdAndDelete(id).exec();
 
-    if (!foundClass) {
+    if (!deletedClass) {
       throw new NotFoundException('Turma não encontrada.');
     }
 
-    return foundClass;
+    return deletedClass;
   }
 
   async update(
@@ -111,6 +78,110 @@ export class ClassesService {
     }
 
     return updatedClass;
+  }
+
+  async findAll(
+    week?: string,
+    attendanceStatus?: string,
+  ): Promise<ClassDocument[]> {
+    const filters: Record<string, string> = {};
+
+    if (week) {
+      filters.week = week;
+    }
+
+    if (attendanceStatus) {
+      filters.attendanceStatus = attendanceStatus;
+    }
+
+    return this.classModel.find(filters).sort({ name: 1 }).exec();
+  }
+
+  async findOne(id: string): Promise<ClassDocument> {
+    this.validateClassId(id);
+    const foundClass = await this.classModel.findById(id).exec();
+
+    if (!foundClass) {
+      throw new NotFoundException('Turma não encontrada.');
+    }
+
+    return foundClass;
+  }
+
+  async findTodayClassesByStudent(studentId: string, customDate?: string) {
+    this.validateReference(studentId, 'Aluno');
+
+    const targetDate = customDate ? new Date(customDate) : new Date();
+    if (Number.isNaN(targetDate.getTime())) {
+      throw new BadRequestException('Data inválida.');
+    }
+
+    // Mapeia o índice do dia (0-6) para o padrão usado no campo "week"
+    const daysOfWeek = [
+      'Domingo',
+      'Segunda-feira',
+      'Terça-feira',
+      'Quarta-feira',
+      'Quinta-feira',
+      'Sexta-feira',
+      'Sábado',
+    ];
+
+    // Usa o prefixo (ex: "Segunda") com regex case-insensitive para funcionar
+    // tanto se você salvou "Segunda-feira" quanto "Segunda"
+    const dayName = daysOfWeek[targetDate.getDay()];
+    const dayPrefix = dayName.split('-')[0];
+
+    const classes = await this.classModel
+      .find({
+        enrolledStudents: studentId,
+        week: { $regex: new RegExp(`^${dayPrefix}`, 'i') },
+      })
+      .sort({ startTime: 1 })
+      .exec();
+
+    const targetDayString = targetDate.toISOString().slice(0, 10);
+
+    return classes.map((cls) => {
+      // Procura a lista de chamada referente ao dia de hoje
+      const todayAttendance = cls.attendanceList.find(
+        (item) =>
+          new Date(item.date).toISOString().slice(0, 10) === targetDayString,
+      );
+
+      // Procura o registro específico do aluno dentro da chamada de hoje
+      const studentRecord = todayAttendance?.students.find(
+        (s) => s.studentId === studentId,
+      );
+
+      return {
+        id: cls._id,
+        name: cls.name,
+        id_professor: cls.id_professor,
+        week: cls.week,
+        startTime: cls.startTime,
+        endTime: cls.endTime,
+        attendanceStatus: cls.attendanceStatus,
+        attendanceRecorded: Boolean(todayAttendance), // true se a chamada já foi iniciada hoje
+        present: studentRecord ? studentRecord.present : false, // true se presente, false se ausente ou chamada não iniciada
+      };
+    });
+  }
+
+  async findByTeacher(teacherId: string): Promise<ClassDocument[]> {
+    this.validateReference(teacherId, 'Professor');
+    return this.classModel
+      .find({ id_professor: teacherId })
+      .sort({ name: 1 })
+      .exec();
+  }
+
+  async findByStudent(studentId: string): Promise<ClassDocument[]> {
+    this.validateReference(studentId, 'Aluno');
+    return this.classModel
+      .find({ enrolledStudents: studentId })
+      .sort({ name: 1 })
+      .exec();
   }
 
   async addStudent(id: string, studentIds: string[]): Promise<ClassDocument> {
@@ -162,17 +233,6 @@ export class ClassesService {
     }
 
     return updatedClass;
-  }
-
-  async remove(id: string): Promise<ClassDocument> {
-    this.validateClassId(id);
-    const deletedClass = await this.classModel.findByIdAndDelete(id).exec();
-
-    if (!deletedClass) {
-      throw new NotFoundException('Turma não encontrada.');
-    }
-
-    return deletedClass;
   }
 
   private validateClassId(id: string) {
