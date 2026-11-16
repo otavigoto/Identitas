@@ -1,14 +1,19 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto.js';
-import { UpdateUserDto } from './dto/update-user.dto.js';
 import { InjectModel } from '@nestjs/mongoose';
+import * as bcrypt from 'bcrypt';
+import { CreateUserDto } from './dto/request/create-user.dto.js';
+import { UpdateUserDto } from './dto/request/update-user.dto.js';
 import { User } from './entities/user.entity.js';
 
 
 @Injectable()
 export class UsersService {
   constructor(@InjectModel(User.name) private userModel: any) {}
-  create(createUserDto: CreateUserDto) {
+
+  // CRUD USERS -----------------------
+
+  async create(createUserDto: CreateUserDto) {
+    createUserDto.password = await bcrypt.hash(createUserDto.password, 10);
     return this.userModel.create(createUserDto);
   }
 
@@ -26,6 +31,24 @@ export class UsersService {
 
   remove(id: string) {
     return this.userModel.findByIdAndRemove(id);
+  }
+
+  // FIM CRUD USERS -----------------------
+
+  findByRa(ra: string) {
+    const user = this.userModel.findOne({ ra });
+    if (!user) {
+      throw new NotFoundException(`Usuário com RA ${ra} não encontrado.`);
+    }
+    return user;
+  }
+
+  async findByNfcUid(nfcUid: string) {
+    const user = await this.userModel.findOne({ nfcUid });
+    if (!user) {
+      throw new NotFoundException(`Usuário com NFC UID ${nfcUid} não encontrado.`);
+    }
+    return user;
   }
 
   async assignNfcKey(id: string, nfcKey: string) {

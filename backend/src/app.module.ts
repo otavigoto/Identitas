@@ -1,17 +1,19 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
+import { AuthModule } from './auth/auth.module.js';
 import { ClassesModule } from './classes/classes.module.js';
-import { AuthorizationModule } from './modules/auth/authorization.module.js';
+import { DatabaseModule } from './database/database.module.js';
+import { UsersModule } from './users/users.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    MongooseModule.forRoot(process.env.MONGODB ?? ''),
+    DatabaseModule,
     ClassesModule,
-    AuthorizationModule,
+    AuthModule,
+    UsersModule
   ],
 })
 export class AppModule {}

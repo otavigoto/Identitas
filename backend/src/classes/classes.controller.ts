@@ -11,9 +11,9 @@ import {
   Query,
 } from '@nestjs/common';
 import { ClassesService } from './classes.service.js';
-import { CreateClassDto } from './dto/create-class.dto.js';
-import { UpdateClassDto } from './dto/update-class.dto.js';
-import { ManageClassStudentDto } from './dto/manage-class-student.dto.js';
+import { CreateClassDto } from './dto/request/create-class.dto.js';
+import { ManageClassStudentDto } from './dto/request/manage-class-student.dto.js';
+import { UpdateClassDto } from './dto/request/update-class.dto.js';
 
 @Controller('classes')
 export class ClassesController {
