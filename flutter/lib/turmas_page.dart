@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'services/nfc_service.dart';
 import 'turma.dart';
 import 'turma_detalhe_page.dart';
 import 'turma_form_page.dart';
@@ -7,7 +8,9 @@ import 'turmas_mock.dart';
 
 /// Lista de aulas (turmas) do professor, com busca e filtro por semestre.
 class TurmasPage extends StatefulWidget {
-  const TurmasPage({super.key});
+  const TurmasPage({super.key, this.nfcService});
+
+  final NfcService? nfcService;
 
   @override
   State<TurmasPage> createState() => _TurmasPageState();
@@ -54,6 +57,7 @@ class _TurmasPageState extends State<TurmasPage> {
         turma: turma,
         onChanged: _atualizar,
         onDeleted: () => _remover(turma),
+        nfcService: widget.nfcService,
       ),
     ),
   );

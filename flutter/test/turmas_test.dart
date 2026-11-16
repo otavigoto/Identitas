@@ -1,16 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:identitas/services/nfc_service.dart';
 import 'package:identitas/turmas_page.dart';
+import 'package:nfc_manager/nfc_manager.dart';
+
+class _NfcIndisponivel extends NfcService {
+  @override
+  Future<bool> estaDisponivel() async => false;
+}
+
+class _NfcAguardandoCartao extends NfcService {
+  @override
+  Future<bool> estaDisponivel() async => true;
+
+  @override
+  Future<void> lerCartao({
+    required void Function(NfcTag tag) onTagLida,
+    required void Function() onErro,
+  }) async {}
+}
 
 void main() {
   Future<void> abrirLista(
     WidgetTester tester, {
     Size size = const Size(402, 874),
+    NfcService? nfcService,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = size;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(const MaterialApp(home: TurmasPage()));
+    await tester.pumpWidget(
+      MaterialApp(home: TurmasPage(nfcService: nfcService)),
+    );
     await tester.pumpAndSettle();
   }
 
@@ -90,6 +111,42 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Banco de Dados II'), findsOneWidget);
+  });
+
+  testWidgets(
+    'Abre o fluxo NFC do detalhe e informa quando não está disponível',
+    (tester) async {
+      await abrirLista(tester, nfcService: _NfcIndisponivel());
+      await tester.tap(find.text('Projeto Integrador VI'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('validar-presenca')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'NFC indisponível neste dispositivo. Use um aparelho compatível e tente novamente.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('nfc-tentar-novamente')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Cancela a leitura NFC e volta ao detalhe da turma', (
+    tester,
+  ) async {
+    await abrirLista(tester, nfcService: _NfcAguardandoCartao());
+    await tester.tap(find.text('Projeto Integrador VI'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('validar-presenca')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Aproxime seu celular do\nleitor NFC'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('nfc-cancelar')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Detalhe da aula'), findsOneWidget);
   });
 
   testWidgets('Adiciona e remove alunos', (tester) async {
