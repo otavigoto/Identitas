@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'turmas_page.dart';
+import 'screens/home_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -31,7 +31,7 @@ class _LoginPageState extends State<LoginPage> {
     // TODO backend: autenticar antes de navegar.
     Navigator.of(
       context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const TurmasPage()));
+    ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
   }
 
   InputDecoration _decoration(String hint, {Widget? suffix}) => InputDecoration(

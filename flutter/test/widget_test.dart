@@ -19,8 +19,8 @@ void main() {
 
   final identifier = find.byKey(const Key('login-identifier'));
   final password = find.byKey(const Key('login-password'));
-  // Título da lista de aulas, exibida após o login.
   const message = 'Minhas aulas';
+  const homeMessage = 'Identitas';
 
   testWidgets('Exibe a tela e exige os dois campos', (tester) async {
     await openLogin(tester);
@@ -31,7 +31,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Informe seu email ou RA.'), findsOneWidget);
     expect(find.text('Informe sua senha.'), findsOneWidget);
-    expect(find.text(message), findsNothing);
+    expect(find.text(homeMessage), findsNothing);
   });
 
   testWidgets('Alterna a senha sem perder seu conteúdo', (tester) async {
@@ -58,7 +58,8 @@ void main() {
       await tester.enterText(password, 'senha123');
       await tester.tap(find.text('Entrar'));
       await tester.pumpAndSettle();
-      expect(find.text(message), findsOneWidget);
+      expect(find.text(homeMessage), findsOneWidget);
+      expect(find.text(message), findsNothing);
       expect(find.text('Login'), findsNothing);
       expect(tester.testTextInput.isVisible, isFalse);
     });
@@ -76,7 +77,7 @@ void main() {
     await tester.enterText(password, 'senha123');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
-    expect(find.text(message), findsOneWidget);
+    expect(find.text(homeMessage), findsOneWidget);
   });
 
   testWidgets('Rejeita identificador em branco', (tester) async {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../services/nfc_service.dart';
+import 'package:identitas/services/nfc_service.dart';
 import 'nfc_instrucao_page.dart';
-import 'nfc_scaffold.dart';
+import '../widgets/nfc_scaffold.dart';
 
 class NfcErroPage extends StatelessWidget {
   const NfcErroPage({
@@ -20,43 +20,16 @@ class NfcErroPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NfcScaffold(
-      cardChild: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.cancel_outlined,
-            size: 80,
-            color: Color(0xFFB81D1D),
-            semanticLabel: 'Falha na validação',
-          ),
-          const SizedBox(height: 22),
-          const Text(
-            'Não foi possível validar',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFFB81D1D),
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            mensagem,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF5C5B4D),
-              fontSize: 13,
-            ),
-          ),
-          TextButton(
-            key: const Key('nfc-cancelar'),
-            onPressed: () => Navigator.of(context).pop(),
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF1E1E1E),
-            ),
-            child: const Text('Cancelar'),
-          ),
-        ],
+      cardChild: NfcStatusCard(
+        title: 'Não foi possível validar',
+        subtitle: mensagem,
+        iconColor: const Color(0xFFB81D1D),
+        icon: const Icon(
+          Icons.cancel_outlined,
+          size: 64,
+          color: Color(0xFFB81D1D),
+          semanticLabel: 'Falha na validação',
+        ),
       ),
       bottomButton: FilledButton(
         key: const Key('nfc-tentar-novamente'),

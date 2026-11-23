@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'screens/nfc_instrucao_page.dart';
-import 'screens/nfc_scaffold.dart';
+import 'widgets/nfc_scaffold.dart';
 import 'services/nfc_service.dart';
 import 'turma.dart';
 import 'turma_form_page.dart';

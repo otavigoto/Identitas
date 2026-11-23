@@ -71,7 +71,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Lendo...'), findsOneWidget);
+    expect(find.text('Lendo cartão'), findsOneWidget);
     await tester.tap(find.byKey(const Key('nfc-cancelar')));
     await tester.pumpAndSettle();
 
