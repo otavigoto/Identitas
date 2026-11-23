@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -9,13 +10,22 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
+import { Roles } from '../common/decorators/roles.decorator.js';
+import { Role } from '../common/enums/role.enum.js';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
+import type { JwtPayload } from '../auth/auth.service.js';
 import { ClassesService } from './classes.service.js';
 import { CreateClassDto } from './dto/request/create-class.dto.js';
 import { ManageClassStudentDto } from './dto/request/manage-class-student.dto.js';
 import { UpdateClassDto } from './dto/request/update-class.dto.js';
 import { AttendanceStudentDto } from './dto/request/attendance-student.dto.js';
 import { MarkAttendanceNfcDto } from './dto/request/mark-attendance-nfc.dto.js';
+import { ScanProfessorNfcDto } from './dto/request/scan-professor-nfc.dto.js';
 
 @Controller('classes')
 export class ClassesController {
@@ -53,21 +63,66 @@ export class ClassesController {
 
   // FIM CRUD CLASSES -----------------------
 
+  @Get('me/today')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.STUDENT, Role.PROFESSOR)
+  getMyTodayClasses(
+    @Req() req: Request & { user: JwtPayload },
+    @Query('date') date?: string,
+  ) {
+    return this.classesService.getHomeData(req.user.sub, req.user.role, date);
+  }
+
+  @Get('me/weekly')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.STUDENT, Role.PROFESSOR)
+  getMyWeeklyClasses(@Req() req: Request & { user: JwtPayload }) {
+    return this.classesService.getWeeklyData(req.user.sub, req.user.role);
+  }
+
   @Get('student/:studentId/today')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.STUDENT)
   findTodayClassesByStudent(
     @Param('studentId') studentId: string,
+    @Req() req: Request & { user: JwtPayload },
     @Query('date') date?: string, // Opcional: permite testar passando ?date=2026-11-16
   ) {
+    if (studentId !== req.user.sub) {
+      throw new ForbiddenException(
+        'Só é possível consultar suas próprias aulas.',
+      );
+    }
     return this.classesService.findTodayClassesByStudent(studentId, date);
   }
 
   @Get('teacher/:teacherId')
-  findByTeacher(@Param('teacherId') teacherId: string) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
+  findByTeacher(
+    @Param('teacherId') teacherId: string,
+    @Req() req: Request & { user: JwtPayload },
+  ) {
+    if (teacherId !== req.user.sub) {
+      throw new ForbiddenException(
+        'Só é possível consultar suas próprias turmas.',
+      );
+    }
     return this.classesService.findByTeacher(teacherId);
   }
 
   @Get('student/:studentId')
-  findByStudent(@Param('studentId') studentId: string) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.STUDENT)
+  findByStudent(
+    @Param('studentId') studentId: string,
+    @Req() req: Request & { user: JwtPayload },
+  ) {
+    if (studentId !== req.user.sub) {
+      throw new ForbiddenException(
+        'Só é possível consultar suas próprias aulas.',
+      );
+    }
     return this.classesService.findByStudent(studentId);
   }
 
@@ -93,32 +148,94 @@ export class ClassesController {
 
   // Funções de presença -----------------------
 
+  @Get(':id/students')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
+  getAttendanceListToday(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtPayload },
+    @Query('date') date?: string,
+  ) {
+    return this.classesService.getAttendanceList(id, req.user.sub, date);
+  }
+
+  @Get(':id/students/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
+  getAllAttendanceList(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtPayload },
+  ) {
+    return this.classesService.getAllAttendanceList(id, req.user.sub);
+  }
+
+  @Get(':id/attendance/summary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
+  getAttendanceSummary(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtPayload },
+  ) {
+    return this.classesService.getAllAttendanceList(id, req.user.sub);
+  }
+
   @Patch(':id/attendance/open')
-  openAttendance(@Param('id') id: string) {
-    return this.classesService.openAttendance(id);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
+  openAttendance(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtPayload },
+  ) {
+    return this.classesService.openAttendance(id, req.user.sub);
   }
 
   @Post(':id/students/attendance')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
   @HttpCode(HttpStatus.OK)
   markAttendance(
     @Param('id') id: string,
+    @Req() req: Request & { user: JwtPayload },
     @Body() attendanceStudentDto: AttendanceStudentDto,
   ) {
-    return this.classesService.markAttendance(id, attendanceStudentDto);
+    return this.classesService.markAttendance(
+      id,
+      attendanceStudentDto,
+      req.user.sub,
+    );
   }
 
   @Post(':id/students/attendance/nfc')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
   @HttpCode(HttpStatus.OK)
   markAttendanceByNfc(
     @Param('id') id: string,
+    @Req() req: Request & { user: JwtPayload },
     @Body() markAttendanceNfcDto: MarkAttendanceNfcDto,
   ) {
-    return this.classesService.markAttendanceByNfc(id, markAttendanceNfcDto);
+    return this.classesService.markAttendanceByNfc(
+      id,
+      markAttendanceNfcDto,
+      req.user.sub,
+    );
   }
 
-  //TODO Conseguir pegar a data e hora do servidor e não do cliente, para evitar que o aluno consiga burlar a presença. (ia q gerou esse comment)
-
-  //TODO LER O UID NFC DO PROFESSOR E CONSEGUIR PRESENÇA DESSA FORMA
+  @Post(':id/attendance/scan-professor')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.STUDENT)
+  @HttpCode(HttpStatus.OK)
+  markAttendanceByProfessorNfc(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtPayload },
+    @Body() scanProfessorNfcDto: ScanProfessorNfcDto,
+  ) {
+    return this.classesService.scanProfessorNfc(
+      id,
+      req.user.sub,
+      scanProfessorNfcDto.nfcUid,
+    );
+  }
 
   // FIM Funções de presença -----------------------
 }

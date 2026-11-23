@@ -22,7 +22,8 @@ export class AttendanceItem {
   students: StudentAttendanceRecord[];
 }
 
-export const AttendanceItemSchema = SchemaFactory.createForClass(AttendanceItem);
+export const AttendanceItemSchema =
+  SchemaFactory.createForClass(AttendanceItem);
 
 @Schema({ timestamps: true })
 export class Class extends Document {
@@ -38,6 +39,9 @@ export class Class extends Document {
   @Prop({ required: true })
   week: string;
 
+  @Prop({ min: 0 })
+  qtdAulas?: number;
+
   @Prop({ required: true })
   startTime: string;
 
@@ -46,7 +50,8 @@ export class Class extends Document {
 
   @Prop({
     required: true,
-    enum: AttendanceStatus,
+    type: String,
+    enum: Object.values(AttendanceStatus),
     default: AttendanceStatus.CLOSED,
   })
   attendanceStatus: AttendanceStatus;

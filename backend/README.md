@@ -57,6 +57,41 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+## Identitas: autenticação e aulas
+
+As rotas abaixo recebem `Authorization: Bearer <accessToken>`. O `sub` do token
+é o ID MongoDB do usuário; `ra` é somente o identificador de login e `nfcUid`
+identifica o cartão NFC. Use `GET /auth/profile` para obter o perfil sem enviar
+um ID na URL.
+
+- `GET /classes/me/today` retorna `{ user, classes }`. Para aluno, cada aula
+  inclui `attendanceRecorded` e `present`; para professor, retorna somente os
+  dados de horário.
+- `GET /classes/me/weekly` retorna as aulas da semana. Para aluno, inclui o
+  histórico e a frequência por aula, além de `overallAttendance`; para
+  professor, retorna somente os dados das disciplinas e horários.
+- `GET /classes/:id/students` (professor responsável) retorna a lista da chamada
+  do dia com `id`, `name`, `ra`, `nfcUid` e `present`, além dos totais de
+  presentes e ausentes.
+- `GET /classes/:id/attendance/summary` retorna a frequência geral da turma e
+  a frequência individual dos alunos.
+- `POST /classes/:id/students/attendance` aceita a chamada completa:
+
+  ```json
+  {
+    "students": [
+      { "studentId": "ID_MONGODB_DO_ALUNO", "present": true },
+      { "studentId": "ID_MONGODB_DE_OUTRO_ALUNO", "present": false }
+    ]
+  }
+  ```
+
+  Cada aluno matriculado deve aparecer exatamente uma vez. O formato legado
+  `presentStudentIds` continua aceito. Para registrar leitura do cartão de um
+  aluno, use `POST /classes/:id/students/attendance/nfc` com `nfcUids`; para o
+  aluno validar o cartão do professor, use
+  `POST /classes/:id/attendance/scan-professor` com `{ "nfcUid": "..." }`.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
