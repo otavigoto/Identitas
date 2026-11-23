@@ -9,9 +9,14 @@ import 'turmas_api.dart';
 
 /// Lista de aulas (turmas) do professor, com busca e filtro por semestre.
 class TurmasPage extends StatefulWidget {
-  const TurmasPage({super.key, this.nfcService});
+  const TurmasPage({
+    super.key,
+    this.nfcService,
+    this.api,
+  });
 
   final NfcService? nfcService;
+  final TurmasApi? api;
 
   @override
   State<TurmasPage> createState() => _TurmasPageState();
