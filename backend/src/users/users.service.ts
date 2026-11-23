@@ -1,10 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from './dto/request/create-user.dto.js';
 import { UpdateUserDto } from './dto/request/update-user.dto.js';
 import { User } from './entities/user.entity.js';
-
 
 @Injectable()
 export class UsersService {
@@ -14,6 +17,9 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto) {
     createUserDto.password = await bcrypt.hash(createUserDto.password, 10);
+    if (createUserDto.nfcUid) {
+      createUserDto.nfcUid = createUserDto.nfcUid.trim().toUpperCase();
+    }
     return this.userModel.create(createUserDto);
   }
 
@@ -36,29 +42,34 @@ export class UsersService {
   // FIM CRUD USERS -----------------------
 
   findByRa(ra: string) {
-    const user = this.userModel.findOne({ ra });
-    if (!user) {
-      throw new NotFoundException(`Usuário com RA ${ra} não encontrado.`);
-    }
-    return user;
+    return this.userModel.findOne({ ra }).exec();
   }
 
   async findByNfcUid(nfcUid: string) {
-    const user = await this.userModel.findOne({ nfcUid });
+    const user = await this.userModel
+      .findOne({ nfcUid: nfcUid.trim().toUpperCase() })
+      .exec();
     if (!user) {
-      throw new NotFoundException(`Usuário com NFC UID ${nfcUid} não encontrado.`);
+      throw new NotFoundException(
+        `Usuário com NFC UID ${nfcUid} não encontrado.`,
+      );
     }
     return user;
   }
 
   async assignNfcKey(id: string, nfcUid: string) {
-    const existingUser = await this.userModel.findOne({ nfcUid }).exec();
+    const normalizedNfcUid = nfcUid.trim().toUpperCase();
+    const existingUser = await this.userModel
+      .findOne({ nfcUid: normalizedNfcUid })
+      .exec();
     if (existingUser && existingUser._id.toString() !== id) {
-      throw new BadRequestException('Esta chave NFC já está cadastrada para outro usuário.');
+      throw new BadRequestException(
+        'Esta chave NFC já está cadastrada para outro usuário.',
+      );
     }
 
     const updatedUser = await this.userModel
-      .findByIdAndUpdate(id, { nfcUid }, { new: true })
+      .findByIdAndUpdate(id, { nfcUid: normalizedNfcUid }, { new: true })
       .exec();
 
     if (!updatedUser) {

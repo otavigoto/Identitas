@@ -5,7 +5,8 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isValidObjectId, Model } from 'mongoose';
-import { User, UserDocument } from '../users/entities/user.entity.js'; // Ajuste o caminho
+import { Role } from '../common/enums/role.enum.js';
+import { User, UserDocument } from '../users/entities/user.entity.js';
 import { AttendanceStudentDto } from './dto/request/attendance-student.dto.js';
 import {
   AttendanceStatus,
@@ -30,6 +31,7 @@ export class ClassesService {
       id_professor,
       enrolledStudents = [],
       week,
+      qtdAulas,
       startTime,
       endTime,
       attendanceStatus,
@@ -42,6 +44,7 @@ export class ClassesService {
       id_professor,
       enrolledStudents,
       week,
+      qtdAulas,
       startTime,
       endTime,
       attendanceStatus,
@@ -108,50 +111,275 @@ export class ClassesService {
     return foundClass;
   }
 
-  async findTodayClassesByStudent(studentId: string, customDate?: string) {
-    this.validateReference(studentId, 'Aluno');
-
-    const targetDate = customDate ? new Date(customDate) : new Date();
-    if (Number.isNaN(targetDate.getTime())) {
-      throw new BadRequestException('Data inválida.');
+  async getHomeData(userId: string, role: Role, customDate?: string) {
+    this.validateReference(userId, 'Usuário');
+    const targetDate = this.parseDate(customDate);
+    const user = await this.userModel
+      .findById(userId)
+      .select('_id name ra role')
+      .exec();
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado.');
     }
-
-    // Mapeia o índice do dia (0-6) para o padrão usado no campo "week"
-    const daysOfWeek = [
-      'Domingo',
-      'Segunda-feira',
-      'Terça-feira',
-      'Quarta-feira',
-      'Quinta-feira',
-      'Sexta-feira',
-      'Sábado',
-    ];
-
-    // Usa o prefixo (ex: "Segunda") com regex case-insensitive para funcionar
-    // tanto se você salvou "Segunda-feira" quanto "Segunda"
-    const dayName = daysOfWeek[targetDate.getDay()];
-    const dayPrefix = dayName.split('-')[0];
 
     const classes = await this.classModel
       .find({
-        enrolledStudents: studentId,
-        week: { $regex: new RegExp(`^${dayPrefix}`, 'i') },
+        ...(role === Role.STUDENT
+          ? { enrolledStudents: userId }
+          : { id_professor: userId }),
+        week: { $regex: new RegExp(`^${this.getDayPrefix(targetDate)}`, 'i') },
       })
       .sort({ startTime: 1 })
       .exec();
 
-    const targetDayString = targetDate.toISOString().slice(0, 10);
+    const dayKey = this.getDateKey(targetDate);
+    return {
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        ra: user.ra,
+        role: user.role,
+      },
+      classes: classes.map((cls) => {
+        const classData = this.getScheduleData(cls);
+        if (role !== Role.STUDENT) {
+          return classData;
+        }
+
+        const record = cls.attendanceList.find(
+          (item) => this.getDateKey(item.date) === dayKey,
+        );
+        const studentRecord = record?.students.find(
+          (item) => item.studentId.toString() === userId,
+        );
+        return {
+          ...classData,
+          attendanceRecorded: Boolean(record),
+          present: studentRecord?.present ?? false,
+        };
+      }),
+    };
+  }
+
+  async getWeeklyData(userId: string, role: Role) {
+    this.validateReference(userId, 'Usuário');
+    const user = await this.userModel
+      .findById(userId)
+      .select('_id name ra role')
+      .exec();
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado.');
+    }
+
+    const classes = await this.classModel
+      .find(
+        role === Role.STUDENT
+          ? { enrolledStudents: userId }
+          : { id_professor: userId },
+      )
+      .sort({ week: 1, startTime: 1 })
+      .exec();
+
+    let totalLessons = 0;
+    let presentLessons = 0;
+    const classData = classes.map((cls) => {
+      const schedule = this.getScheduleData(cls);
+      if (role !== Role.STUDENT) {
+        return schedule;
+      }
+
+      const history = cls.attendanceList
+        .map((record) => ({
+          date: record.date,
+          present:
+            record.students.find((item) => item.studentId.toString() === userId)
+              ?.present ?? false,
+        }))
+        .sort(
+          (left, right) =>
+            new Date(left.date).getTime() - new Date(right.date).getTime(),
+        );
+      const present = history.filter((record) => record.present).length;
+      const lessons = history.length;
+      totalLessons += lessons;
+      presentLessons += present;
+
+      return {
+        ...schedule,
+        attendance: {
+          lessons,
+          present,
+          absent: lessons - present,
+          percentage: this.getPercentage(present, lessons),
+          history,
+        },
+      };
+    });
+
+    return {
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        ra: user.ra,
+        role: user.role,
+      },
+      classes: classData,
+      ...(role === Role.STUDENT
+        ? {
+            overallAttendance: {
+              lessons: totalLessons,
+              present: presentLessons,
+              absent: totalLessons - presentLessons,
+              percentage: this.getPercentage(presentLessons, totalLessons),
+            },
+          }
+        : {}),
+    };
+  }
+
+  async getAttendanceList(id: string, teacherId: string, customDate?: string) {
+    const foundClass = await this.findOne(id);
+    this.assertClassTeacher(foundClass, teacherId);
+    const targetDate = this.parseDate(customDate);
+    const dayKey = this.getDateKey(targetDate);
+    const record = foundClass.attendanceList.find(
+      (item) => this.getDateKey(item.date) === dayKey,
+    );
+    const students = await this.getClassStudents(foundClass);
+    const presentIds = new Set(
+      record?.students
+        .filter((item) => item.present)
+        .map((item) => item.studentId.toString()) ?? [],
+    );
+    const studentList = students.map((student) => ({
+      id: student._id.toString(),
+      name: student.name,
+      ra: student.ra,
+      nfcUid: student.nfcUid ?? null,
+      present: presentIds.has(student._id.toString()),
+    }));
+    const present = studentList.filter((student) => student.present).length;
+
+    return {
+      class: this.getScheduleData(foundClass),
+      date: targetDate,
+      attendanceRecorded: Boolean(record),
+      totalStudents: studentList.length,
+      present,
+      absent: studentList.length - present,
+      students: studentList,
+    };
+  }
+
+  async getAllAttendanceList(id: string, teacherId: string) {
+    const foundClass = await this.findOne(id);
+    this.assertClassTeacher(foundClass, teacherId);
+    const students = await this.getClassStudents(foundClass);
+    const roster = students.map((student) => {
+      const history = foundClass.attendanceList
+        .map((record) => ({
+          date: record.date,
+          present:
+            record.students.find(
+              (item) => item.studentId.toString() === student._id.toString(),
+            )?.present ?? false,
+        }))
+        .sort(
+          (left, right) =>
+            new Date(left.date).getTime() - new Date(right.date).getTime(),
+        );
+      const present = history.filter((record) => record.present).length;
+
+      return {
+        id: student._id.toString(),
+        name: student.name,
+        ra: student.ra,
+        nfcUid: student.nfcUid ?? null,
+        attendance: {
+          lessons: history.length,
+          present,
+          absent: history.length - present,
+          percentage: this.getPercentage(present, history.length),
+          history,
+        },
+      };
+    });
+    const totalAttendance = foundClass.attendanceList.length * roster.length;
+    const presentAttendance = roster.reduce(
+      (total, student) => total + student.attendance.present,
+      0,
+    );
+
+    return {
+      class: this.getScheduleData(foundClass),
+      attendance: {
+        lessons: foundClass.attendanceList.length,
+        studentRecords: totalAttendance,
+        present: presentAttendance,
+        absent: totalAttendance - presentAttendance,
+        percentage: this.getPercentage(presentAttendance, totalAttendance),
+      },
+      students: roster,
+    };
+  }
+
+  async scanProfessorNfc(classId: string, studentId: string, nfcUid: string) {
+    this.validateReference(studentId, 'Aluno');
+    const foundClass = await this.findOne(classId);
+    const student = await this.userModel
+      .findById(studentId)
+      .select('_id')
+      .exec();
+    if (!student) {
+      throw new NotFoundException('Aluno não encontrado.');
+    }
+    if (!foundClass.enrolledStudents.includes(studentId)) {
+      throw new BadRequestException('Aluno não matriculado nesta turma.');
+    }
+
+    const professor = await this.userModel
+      .findById(foundClass.id_professor)
+      .select('nfcUid')
+      .exec();
+    if (
+      !professor?.nfcUid ||
+      professor.nfcUid.trim().toUpperCase() !== nfcUid.trim().toUpperCase()
+    ) {
+      throw new BadRequestException(
+        'O NFC informado não pertence ao professor da turma.',
+      );
+    }
+
+    return this.markAttendance(
+      classId,
+      {
+        presentStudentIds: [studentId],
+      },
+      foundClass.id_professor,
+    );
+  }
+
+  async findTodayClassesByStudent(studentId: string, customDate?: string) {
+    this.validateReference(studentId, 'Aluno');
+    const targetDate = this.parseDate(customDate);
+
+    const classes = await this.classModel
+      .find({
+        enrolledStudents: studentId,
+        week: { $regex: new RegExp(`^${this.getDayPrefix(targetDate)}`, 'i') },
+      })
+      .sort({ startTime: 1 })
+      .exec();
+
+    const targetDayString = this.getDateKey(targetDate);
 
     return classes.map((cls) => {
-      // Procura a lista de chamada referente ao dia de hoje
       const todayAttendance = cls.attendanceList.find(
-        (item) =>
-          new Date(item.date).toISOString().slice(0, 10) === targetDayString,
+        (item) => this.getDateKey(item.date) === targetDayString,
       );
 
-      // Procura o registro específico do aluno dentro da chamada de hoje
       const studentRecord = todayAttendance?.students.find(
-        (s) => s.studentId === studentId,
+        (student) => student.studentId.toString() === studentId,
       );
 
       return {
@@ -162,8 +390,8 @@ export class ClassesService {
         startTime: cls.startTime,
         endTime: cls.endTime,
         attendanceStatus: cls.attendanceStatus,
-        attendanceRecorded: Boolean(todayAttendance), // true se a chamada já foi iniciada hoje
-        present: studentRecord ? studentRecord.present : false, // true se presente, false se ausente ou chamada não iniciada
+        attendanceRecorded: Boolean(todayAttendance),
+        present: studentRecord?.present ?? false,
       };
     });
   }
@@ -242,14 +470,83 @@ export class ClassesService {
   }
 
   private validateReference(value: string, label: string) {
-    if (!value || !value.trim()) {
+    if (!value || !isValidObjectId(value)) {
       throw new BadRequestException(`${label} inválido.`);
     }
   }
 
-  async openAttendance(id: string): Promise<ClassDocument> {
-    this.validateClassId(id);
+  private parseDate(customDate?: string): Date {
+    const targetDate = customDate ? new Date(customDate) : new Date();
+    if (Number.isNaN(targetDate.getTime())) {
+      throw new BadRequestException('Data inválida.');
+    }
+    return targetDate;
+  }
 
+  private getDateKey(date: Date | string): string {
+    const parsedDate = new Date(date);
+    if (Number.isNaN(parsedDate.getTime())) {
+      throw new BadRequestException('Data de presença inválida.');
+    }
+    return parsedDate.toISOString().slice(0, 10);
+  }
+
+  private getDayPrefix(date: Date): string {
+    const daysOfWeek = [
+      'Domingo',
+      'Segunda',
+      'Terça',
+      'Quarta',
+      'Quinta',
+      'Sexta',
+      'Sábado',
+    ];
+    return daysOfWeek[date.getDay()];
+  }
+
+  private getScheduleData(cls: ClassDocument) {
+    return {
+      id: cls._id.toString(),
+      name: cls.name,
+      id_professor: cls.id_professor,
+      week: cls.week,
+      qtdAulas: cls.qtdAulas,
+      startTime: cls.startTime,
+      endTime: cls.endTime,
+    };
+  }
+
+  private getPercentage(present: number, lessons: number): number {
+    return lessons === 0 ? 0 : Math.round((present / lessons) * 10000) / 100;
+  }
+
+  private async getClassStudents(foundClass: ClassDocument) {
+    foundClass.enrolledStudents.forEach((studentId) =>
+      this.validateReference(studentId, 'Aluno'),
+    );
+    const students = await this.userModel
+      .find({ _id: { $in: foundClass.enrolledStudents } })
+      .select('_id name ra nfcUid')
+      .sort({ name: 1 })
+      .exec();
+    if (students.length !== foundClass.enrolledStudents.length) {
+      throw new NotFoundException(
+        'Há alunos matriculados sem usuário correspondente.',
+      );
+    }
+    return students;
+  }
+
+  private assertClassTeacher(foundClass: ClassDocument, teacherId: string) {
+    this.validateReference(teacherId, 'Professor');
+    if (foundClass.id_professor !== teacherId) {
+      throw new NotFoundException('Turma não encontrada.');
+    }
+  }
+
+  async openAttendance(id: string, teacherId: string): Promise<ClassDocument> {
+    const foundClass = await this.findOne(id);
+    this.assertClassTeacher(foundClass, teacherId);
     const updatedClass = await this.classModel
       .findByIdAndUpdate(
         id,
@@ -271,6 +568,7 @@ export class ClassesService {
   async markAttendance(
     id: string,
     attendanceStudentDto: AttendanceStudentDto,
+    teacherId: string,
   ): Promise<ClassDocument> {
     this.validateClassId(id);
 
@@ -278,6 +576,7 @@ export class ClassesService {
     if (!foundClass) {
       throw new NotFoundException('Turma não encontrada.');
     }
+    this.assertClassTeacher(foundClass, teacherId);
 
     // 1. Verifica se a chamada está fechada
     if (foundClass.attendanceStatus === AttendanceStatus.CLOSED) {
@@ -303,9 +602,27 @@ export class ClassesService {
       }
     }
 
-    // 3. Valida se todos os alunos enviados estão matriculados na turma
-    const enrolledSet = new Set(foundClass.enrolledStudents);
-    const invalidStudents = attendanceStudentDto.presentStudentIds.filter(
+    const fullAttendance = attendanceStudentDto.students;
+    const presentStudentIds =
+      fullAttendance
+        ?.filter((student) => student.present)
+        .map((student) => student.studentId) ??
+      attendanceStudentDto.presentStudentIds;
+    if (!fullAttendance && !presentStudentIds) {
+      throw new BadRequestException(
+        'Informe a lista completa de alunos ou os IDs dos presentes.',
+      );
+    }
+
+    // IDs de alunos são sempre ObjectIds; RA e NFC não substituem o ID interno.
+    const enrolledSet = new Set(foundClass.enrolledStudents.map(String));
+    const submittedIds = fullAttendance
+      ? fullAttendance.map((student) => student.studentId)
+      : (presentStudentIds ?? []);
+    submittedIds.forEach((studentId) =>
+      this.validateReference(studentId, 'Aluno'),
+    );
+    const invalidStudents = submittedIds.filter(
       (studentId) => !enrolledSet.has(studentId),
     );
 
@@ -314,19 +631,47 @@ export class ClassesService {
         `Alunos não matriculados nesta turma: ${invalidStudents.join(', ')}`,
       );
     }
+    if (fullAttendance) {
+      const submittedSet = new Set(submittedIds);
+      if (
+        submittedSet.size !== submittedIds.length ||
+        submittedSet.size !== enrolledSet.size ||
+        [...enrolledSet].some((studentId) => !submittedSet.has(studentId))
+      ) {
+        throw new BadRequestException(
+          'A lista deve conter cada aluno matriculado exatamente uma vez.',
+        );
+      }
+    }
 
     // 4. Verifica se já existe um registro de chamada para a data de hoje
     const targetDate = attendanceStudentDto.date ?? new Date();
-    const targetDayString = targetDate.toISOString().slice(0, 10); // Ex: "2026-11-16"
+    const targetDayString = this.getDateKey(targetDate);
 
     const existingRecord = foundClass.attendanceList.find(
-      (item) =>
-        new Date(item.date).toISOString().slice(0, 10) === targetDayString,
+      (item) => this.getDateKey(item.date) === targetDayString,
     );
+    const submittedAttendance = fullAttendance
+      ? fullAttendance.map(({ studentId, present }) => ({
+          studentId,
+          present,
+        }))
+      : undefined;
 
-    // Cenário A: Já existe chamada hoje -> apenas marca present: true nos novos alunos
+    // Uma lista completa substitui o estado daquele dia; leituras NFC continuam cumulativas.
     if (existingRecord) {
-      if (attendanceStudentDto.presentStudentIds.length === 0) {
+      if (submittedAttendance) {
+        return (
+          (await this.classModel
+            .findOneAndUpdate(
+              { _id: id, 'attendanceList.date': existingRecord.date },
+              { $set: { 'attendanceList.$.students': submittedAttendance } },
+              { new: true, runValidators: true },
+            )
+            .exec()) ?? foundClass
+        );
+      }
+      if (presentStudentIds!.length === 0) {
         return foundClass;
       }
 
@@ -342,7 +687,7 @@ export class ClassesService {
             arrayFilters: [
               {
                 'elem.studentId': {
-                  $in: attendanceStudentDto.presentStudentIds,
+                  $in: presentStudentIds,
                 },
               },
             ],
@@ -356,11 +701,13 @@ export class ClassesService {
     }
 
     // Cenário B: Primeira leitura do dia -> cria o registro com todos os matriculados
-    const presentSet = new Set(attendanceStudentDto.presentStudentIds);
-    const studentsAttendance = foundClass.enrolledStudents.map((studentId) => ({
-      studentId,
-      present: presentSet.has(studentId),
-    }));
+    const presentSet = new Set(presentStudentIds);
+    const studentsAttendance =
+      submittedAttendance ??
+      foundClass.enrolledStudents.map((studentId) => ({
+        studentId,
+        present: presentSet.has(studentId),
+      }));
 
     const newAttendanceRecord = {
       date: targetDate,
@@ -378,12 +725,10 @@ export class ClassesService {
     return updatedClass!;
   }
 
-  // No constructor do ClassesService:
-
-  // Novo método para leitura NFC:
   async markAttendanceByNfc(
     classId: string,
     dto: MarkAttendanceNfcDto,
+    teacherId: string,
   ): Promise<ClassDocument> {
     this.validateClassId(classId);
 
@@ -391,11 +736,16 @@ export class ClassesService {
     let studentIds: string[] = [];
 
     if (normalizedUids.length > 0) {
+      const nfcUidPatterns = normalizedUids.map(
+        (uid) => new RegExp(`^${this.escapeRegExp(uid)}$`, 'i'),
+      );
       const students = await this.userModel
-        .find({ nfcUid: { $in: normalizedUids } })
+        .find({ nfcUid: { $in: nfcUidPatterns } })
         .exec();
 
-      const foundUidsSet = new Set(students.map((s) => s.nfcUid));
+      const foundUidsSet = new Set(
+        students.map((student) => student.nfcUid?.trim().toUpperCase()),
+      );
       const unknownUids = normalizedUids.filter(
         (uid) => !foundUidsSet.has(uid),
       );
@@ -410,9 +760,17 @@ export class ClassesService {
     }
 
     // Executa exatamente a mesma lógica e retorna exatamente o mesmo ClassDocument
-    return this.markAttendance(classId, {
-      presentStudentIds: studentIds,
-      date: dto.date,
-    });
+    return this.markAttendance(
+      classId,
+      {
+        presentStudentIds: studentIds,
+        date: dto.date,
+      },
+      teacherId,
+    );
+  }
+
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 }

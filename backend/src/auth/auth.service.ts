@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException, } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Role } from '../common/enums/role.enum.js';
@@ -76,16 +81,20 @@ export class AuthService {
     const dataToUpdate: Partial<{ ra: string; password: string }> = {};
 
     if (updateAuthDto.ra && updateAuthDto.ra !== user.ra) {
-      const existingRa = await this.usersService.findOne(updateAuthDto.ra);
+      const existingRa = await this.usersService.findByRa(updateAuthDto.ra);
       if (existingRa && existingRa._id.toString() !== userId) {
-        throw new BadRequestException('Este RA já está cadastrado para outro usuário.');
+        throw new BadRequestException(
+          'Este RA já está cadastrado para outro usuário.',
+        );
       }
       dataToUpdate.ra = updateAuthDto.ra;
     }
 
     if (updateAuthDto.password) {
       if (!updateAuthDto.currentPassword) {
-        throw new BadRequestException('Informe a senha atual para definir uma nova senha.');
+        throw new BadRequestException(
+          'Informe a senha atual para definir uma nova senha.',
+        );
       }
 
       const isCurrentValid = await bcrypt.compare(
@@ -123,7 +132,8 @@ export class AuthService {
   }
 
   private sanitizeUser(user: any) {
-    const userObj = typeof user.toObject === 'function' ? user.toObject() : user;
+    const userObj =
+      typeof user.toObject === 'function' ? user.toObject() : user;
     const { password: _, ...userWithoutPassword } = userObj;
     return userWithoutPassword;
   }

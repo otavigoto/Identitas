@@ -4,10 +4,12 @@ import {
   IsArray,
   IsBoolean,
   IsDate,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
+  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -55,6 +57,11 @@ export class CreateClassDto {
   @IsString()
   @IsNotEmpty({ message: 'O campo week não pode estar vazio' })
   week: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  qtdAulas?: number;
 
   @IsString()
   @IsNotEmpty()
