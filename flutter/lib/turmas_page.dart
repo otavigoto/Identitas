@@ -15,6 +15,7 @@ class TurmasPage extends StatefulWidget {
     this.api,
   });
 
+  final TurmasApi? api;
   final NfcService? nfcService;
   final TurmasApi? api;
 
