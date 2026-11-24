@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { Model } from 'mongoose';
 import { Role } from '../common/enums/role.enum.js';
 import { UserDocument } from '../users/entities/user.entity.js';
@@ -325,5 +325,40 @@ describe('ClassesService attendance APIs', () => {
       },
       { new: true, runValidators: true },
     );
+  });
+
+  it('closes attendance only for the class teacher', async () => {
+    const cls = {
+      _id: classId,
+      id_professor: teacherId,
+      attendanceStatus: AttendanceStatus.OPEN,
+    } as unknown as ClassDocument;
+    const updatedClass = {
+      _id: classId,
+      id_professor: teacherId,
+      attendanceStatus: AttendanceStatus.CLOSED,
+    } as unknown as ClassDocument;
+    const update = vi.fn(() => ({
+      exec: vi.fn().mockResolvedValue(updatedClass),
+    }));
+    const classModel = {
+      findById: vi.fn(() => ({ exec: vi.fn().mockResolvedValue(cls) })),
+      findByIdAndUpdate: update,
+    };
+    const service = createService(classModel, {});
+
+    await expect(
+      service.closeAttendance(classId, teacherId),
+    ).resolves.toMatchObject({ attendanceStatus: AttendanceStatus.CLOSED });
+    expect(update).toHaveBeenCalledWith(
+      classId,
+      { attendanceStatus: AttendanceStatus.CLOSED },
+      { new: true, runValidators: true },
+    );
+
+    await expect(
+      service.closeAttendance(classId, firstStudentId),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(update).toHaveBeenCalledTimes(1);
   });
 });

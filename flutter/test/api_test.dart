@@ -339,6 +339,10 @@ void main() {
         ],
       });
 
+      await prof.fecharChamada('c1');
+      expect(s.ultimo.method, 'PATCH');
+      expect(s.ultimo.url.path, '/classes/c1/attendance/close');
+
       await prof.presencaPorNfc('c1', ['A1B2', 'C3D4']);
       expect(s.ultimo.url.path, '/classes/c1/students/attendance/nfc');
       expect(s.corpo, {

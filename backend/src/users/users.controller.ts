@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import type { Request } from 'express';
+import type { JwtPayload } from '../auth/auth.service.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { Role } from '../common/enums/role.enum.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
@@ -48,9 +61,6 @@ export class UsersController {
 
   // FIM CRUD USERS -----------------------
 
-
-  
-
   @Get('profile/:id')
   @Roles(Role.PROFESSOR, Role.STUDENT)
   findProfile(@Param('id') id: string) {
@@ -61,8 +71,14 @@ export class UsersController {
   @Roles(Role.PROFESSOR, Role.STUDENT)
   assignNfc(
     @Param('id') id: string,
+    @Req() req: Request & { user: JwtPayload },
     @Body() assignNfcDto: AssignNfcDto,
   ) {
+    if (id !== req.user.sub) {
+      throw new ForbiddenException(
+        'Só é possível vincular o NFC à sua própria conta.',
+      );
+    }
     return this.usersService.assignNfcKey(id, assignNfcDto.nfcUid);
   }
 }

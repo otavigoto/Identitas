@@ -4,18 +4,22 @@ import 'package:flutter/services.dart';
 import 'auth_api.dart';
 import 'screens/cadastro_screen.dart';
 import 'screens/home_page.dart';
+import 'screens/professor_home_page.dart';
+import 'professor_api.dart';
 import 'turmas_api.dart';
-import 'turmas_page.dart';
 
 /// Tela inicial de cada perfil: aluno vê a home com as aulas do dia e
-/// professor vê a lista de turmas.
-Widget telaInicialPara(String? role) =>
-    role == 'PROFESSOR' ? const TurmasPage() : const HomePage();
+/// professor vê sua home com as aulas do dia.
+Widget telaInicialPara(String? role, {ProfessorApi? professorApi}) =>
+    role == 'PROFESSOR'
+    ? ProfessorHomePage(api: professorApi)
+    : const HomePage();
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key, this.auth});
+  const LoginPage({super.key, this.auth, this.professorApi});
 
   final AuthApi? auth;
+  final ProfessorApi? professorApi;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -52,7 +56,12 @@ class _LoginPageState extends State<LoginPage> {
       final usuario = await _auth.login(_identifier.text, _password.text);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => telaInicialPara(usuario.role)),
+        MaterialPageRoute(
+          builder: (_) => telaInicialPara(
+            usuario.role,
+            professorApi: widget.professorApi,
+          ),
+        ),
       );
     } on ApiException catch (e) {
       if (!mounted) return;

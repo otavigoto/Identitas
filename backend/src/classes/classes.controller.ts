@@ -189,6 +189,16 @@ export class ClassesController {
     return this.classesService.openAttendance(id, req.user.sub);
   }
 
+  @Patch(':id/attendance/close')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
+  closeAttendance(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtPayload },
+  ) {
+    return this.classesService.closeAttendance(id, req.user.sub);
+  }
+
   @Post(':id/students/attendance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.PROFESSOR)

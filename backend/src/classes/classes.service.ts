@@ -577,6 +577,24 @@ export class ClassesService {
     return updatedClass;
   }
 
+  async closeAttendance(id: string, teacherId: string): Promise<ClassDocument> {
+    const foundClass = await this.findOne(id);
+    this.assertClassTeacher(foundClass, teacherId);
+    const updatedClass = await this.classModel
+      .findByIdAndUpdate(
+        id,
+        { attendanceStatus: AttendanceStatus.CLOSED },
+        { new: true, runValidators: true },
+      )
+      .exec();
+
+    if (!updatedClass) {
+      throw new NotFoundException('Turma não encontrada.');
+    }
+
+    return updatedClass;
+  }
+
   async markAttendance(
     id: string,
     attendanceStudentDto: AttendanceStudentDto,

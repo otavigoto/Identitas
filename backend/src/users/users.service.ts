@@ -76,6 +76,8 @@ export class UsersService {
       throw new NotFoundException(`Usuário com ID ${id} não encontrado.`);
     }
 
-    return updatedUser;
+    const user = updatedUser.toObject();
+    delete user.password;
+    return user;
   }
 }

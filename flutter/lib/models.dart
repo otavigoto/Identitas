@@ -9,6 +9,8 @@ class Usuario {
     required this.name,
     required this.ra,
     required this.role,
+    this.course = '',
+    this.periodSemester = '',
     this.nfcUid,
   });
 
@@ -17,6 +19,8 @@ class Usuario {
     name: json['name'] as String? ?? '',
     ra: json['ra'] as String? ?? '',
     role: json['role'] as String? ?? '',
+    course: json['course'] as String? ?? '',
+    periodSemester: json['periodSemester']?.toString() ?? '',
     nfcUid: json['nfcUid'] as String?,
   );
 
@@ -26,6 +30,8 @@ class Usuario {
 
   /// `STUDENT` ou `PROFESSOR`.
   final String role;
+  final String course;
+  final String periodSemester;
   final String? nfcUid;
 
   bool get ehProfessor => role == 'PROFESSOR';
@@ -183,21 +189,29 @@ class AlunoChamada {
     required this.ra,
     required this.present,
     this.nfcUid,
+    this.frequencia,
   });
 
-  factory AlunoChamada.fromJson(Map<String, dynamic> json) => AlunoChamada(
-    id: json['id'] as String,
-    name: json['name'] as String? ?? '',
-    ra: json['ra'] as String? ?? '',
-    present: json['present'] as bool? ?? false,
-    nfcUid: json['nfcUid'] as String?,
-  );
+  factory AlunoChamada.fromJson(Map<String, dynamic> json) {
+    final attendance = json['attendance'];
+    return AlunoChamada(
+      id: json['id'] as String,
+      name: json['name'] as String? ?? '',
+      ra: json['ra'] as String? ?? '',
+      present: json['present'] as bool? ?? false,
+      nfcUid: json['nfcUid'] as String?,
+      frequencia: attendance is Map<String, dynamic>
+          ? Frequencia.fromJson(attendance)
+          : null,
+    );
+  }
 
   final String id;
   final String name;
   final String ra;
   final bool present;
   final String? nfcUid;
+  final Frequencia? frequencia;
 }
 
 /// Resposta de `GET /classes/:id/students`.

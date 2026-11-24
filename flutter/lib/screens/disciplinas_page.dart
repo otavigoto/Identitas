@@ -200,6 +200,20 @@ class _DisciplinasPageState extends State<DisciplinasPage> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  if (_semana?.usuario.periodSemester.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _semana!.usuario.periodSemester.toLowerCase().contains(
+                            'semestre',
+                          )
+                          ? _semana!.usuario.periodSemester
+                          : '${_semana!.usuario.periodSemester}º semestre',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   SizedBox(
                     width: cardWidth,

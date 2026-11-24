@@ -45,6 +45,10 @@ class ProfessorApi {
   Future<void> abrirChamada(String turmaId) =>
       _api.patch('/classes/$turmaId/attendance/open');
 
+  /// `PATCH /classes/:id/attendance/close`: encerra a chamada da turma.
+  Future<void> fecharChamada(String turmaId) =>
+      _api.patch('/classes/$turmaId/attendance/close');
+
   /// `POST /classes/:id/students/attendance`: envia a chamada completa.
   /// [presencas] tem todos os alunos matriculados (`id` → presente?).
   Future<void> enviarChamada(String turmaId, Map<String, bool> presencas) =>

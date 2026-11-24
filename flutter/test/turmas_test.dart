@@ -56,6 +56,7 @@ class FakeBackend {
   /// `missingStudents`).
   final Set<String> alunosOrfaos = {};
   final List<http.Request> requisicoes = [];
+  List<Map<String, dynamic>>? chamadaEnviada;
 
   static Map<String, dynamic> _turma(
     String id,
@@ -117,6 +118,13 @@ class FakeBackend {
       turma['attendanceStatus'] = 'open';
       return json(turma);
     }
+    if (req.method == 'PATCH' &&
+        partes.length == 4 &&
+        partes[2] == 'attendance' &&
+        partes[3] == 'close') {
+      turma['attendanceStatus'] = 'closed';
+      return json(turma);
+    }
     if (req.method == 'POST' && partes.length == 5 && partes[4] == 'nfc') {
       return json(turma);
     }
@@ -129,6 +137,59 @@ class FakeBackend {
       return json(turma);
     }
     final alunos = (turma['enrolledStudents'] as List).cast<String>();
+    if (req.method == 'GET' &&
+        partes.length == 4 &&
+        partes[2] == 'attendance' &&
+        partes[3] == 'summary') {
+      final encontrados = [
+        for (final id in alunos)
+          if (!alunosOrfaos.contains(id)) id,
+      ];
+      return json({
+        'class': {
+          'id': turma['_id'],
+          'name': turma['name'],
+          'id_professor': 'prof1',
+          'week': turma['week'],
+          'startTime': turma['startTime'],
+          'endTime': turma['endTime'],
+        },
+        'attendance': {
+          'lessons': 0,
+          'studentRecords': 0,
+          'present': 0,
+          'absent': 0,
+          'percentage': 0,
+        },
+        'students': [
+          for (final id in encontrados)
+            {
+              'id': id,
+              'name': 'Nome $id',
+              'ra': id,
+              'nfcUid': null,
+              'attendance': {
+                'lessons': 0,
+                'present': 0,
+                'absent': 0,
+                'percentage': 0,
+                'history': [],
+              },
+            },
+        ],
+        'missingStudents': [],
+      });
+    }
+    if (req.method == 'POST' &&
+        partes.length == 4 &&
+        partes[2] == 'students' &&
+        partes[3] == 'attendance') {
+      chamadaEnviada = [
+        for (final item in (body['students'] as List<dynamic>))
+          (item as Map<String, dynamic>),
+      ];
+      return json(turma);
+    }
     if (req.method == 'GET' && partes.length == 3 && partes[2] == 'students') {
       final encontrados = [
         for (final id in alunos)
@@ -221,7 +282,7 @@ void main() {
 
   testWidgets('Carrega as aulas vindas da API', (tester) async {
     await abrirLista(tester);
-    expect(find.text('Minhas aulas'), findsOneWidget);
+    expect(find.text('Minhas disciplinas'), findsOneWidget);
     expect(find.text('Projeto Integrador VI'), findsOneWidget);
     expect(find.text('Banco de Dados'), findsOneWidget);
     expect(find.text('Redes de Computadores'), findsOneWidget);
@@ -296,7 +357,7 @@ void main() {
     await tester.enterText(find.byKey(const Key('turma-inicio')), '08:00');
     await tester.tap(find.byKey(const Key('turma-salvar')));
     await tester.pumpAndSettle();
-    expect(find.text('Minhas aulas'), findsOneWidget);
+    expect(find.text('Minhas disciplinas'), findsOneWidget);
     expect(find.text('Compiladores'), findsOneWidget);
     final enviada = jsonDecode(
       backend.requisicoes.lastWhere((r) => r.method == 'POST').body,
@@ -311,7 +372,7 @@ void main() {
     await abrirLista(tester);
     await tester.tap(find.text('Banco de Dados'));
     await tester.pumpAndSettle();
-    expect(find.text('Detalhe da aula'), findsOneWidget);
+    expect(find.text('Gestão da disciplina'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Editar aula'));
     await tester.pumpAndSettle();
@@ -347,29 +408,63 @@ void main() {
       );
       expect(
         find.text(
-          'NFC indisponível neste dispositivo. Use um aparelho compatível e tente novamente.',
+          'NFC indisponível neste dispositivo. Ajuste a presença manualmente.',
         ),
         findsOneWidget,
       );
-      expect(find.byKey(const Key('nfc-tentar-novamente')), findsOneWidget);
+      expect(find.byKey(const Key('chamada-confirmar')), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('Cancela a leitura NFC e volta ao detalhe da turma', (
-    tester,
-  ) async {
+  testWidgets('Pausa e retoma leitura NFC sem sair da gestão', (tester) async {
     await abrirLista(tester, nfcService: _NfcAguardandoCartao());
     await tester.tap(find.text('Projeto Integrador VI'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('validar-presenca')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Aproxime o celular'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('nfc-cancelar')));
+    expect(find.text('Aproxime os cartões NFC dos alunos.'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chamada-alternar-leitura')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Detalhe da aula'), findsOneWidget);
+    expect(find.textContaining('Leitura pausada'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chamada-alternar-leitura')));
+    await tester.pumpAndSettle();
+    expect(find.text('Aproxime os cartões NFC dos alunos.'), findsOneWidget);
+  });
+
+  testWidgets('Ajusta presença e envia a lista completa antes de fechar', (
+    tester,
+  ) async {
+    await abrirLista(tester, nfcService: _NfcIndisponivel());
+    await tester.tap(find.text('Projeto Integrador VI'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('validar-presenca')));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const Key('ajustar-24012345')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ajustar-24012345')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Presente'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chamada-confirmar')));
+    await tester.pumpAndSettle();
+
+    expect(backend.chamadaEnviada, [
+      {'studentId': '24012345', 'present': true},
+      {'studentId': '24012346', 'present': false},
+    ]);
+    expect(
+      backend.requisicoes.any(
+        (request) =>
+            request.method == 'PATCH' &&
+            request.url.path == '/classes/1/attendance/close',
+      ),
+      isTrue,
+    );
+    expect(find.text('Chamada registrada com sucesso.'), findsOneWidget);
   });
 
   testWidgets('Lista alunos com nome e RA, remove um e não oferece adicionar', (
@@ -444,7 +539,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('confirmar-excluir')));
     await tester.pumpAndSettle();
-    expect(find.text('Minhas aulas'), findsOneWidget);
+    expect(find.text('Minhas disciplinas'), findsOneWidget);
     expect(find.text('Redes de Computadores'), findsNothing);
     expect(backend.turmas.length, 2);
   });

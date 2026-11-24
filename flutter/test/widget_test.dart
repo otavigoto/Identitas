@@ -8,6 +8,7 @@ import 'package:identitas/api_client.dart';
 import 'package:identitas/auth_api.dart';
 import 'package:identitas/login_page.dart';
 import 'package:identitas/main.dart';
+import 'package:identitas/professor_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -41,6 +42,38 @@ void main() {
     ),
   );
 
+  ProfessorApi fakeProfessorApi() => ProfessorApi(
+    ApiClient(
+      baseUrl: 'http://api.teste',
+      session: Session()..accessToken = 'access-token',
+      httpClient: MockClient((req) async {
+        expect(req.url.path, '/classes/me/today');
+        return http.Response(
+          jsonEncode({
+            'user': {
+              '_id': 'p1',
+              'name': 'Prof Teste',
+              'ra': '0001',
+              'role': 'PROFESSOR',
+            },
+            'classes': [
+              {
+                'id': 'c1',
+                'name': 'Banco de Dados',
+                'id_professor': 'p1',
+                'week': 'Segunda-feira',
+                'startTime': '08:00',
+                'endTime': '09:40',
+              },
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    ),
+  );
+
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   Future<void> openLogin(
@@ -53,13 +86,17 @@ void main() {
     tester.view.viewInsets = FakeViewPadding(bottom: keyboard);
     tester.view.padding = const FakeViewPadding(top: 62, bottom: 34);
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MyApp(home: LoginPage(auth: fakeAuth())));
+    await tester.pumpWidget(
+      MyApp(
+        home: LoginPage(auth: fakeAuth(), professorApi: fakeProfessorApi()),
+      ),
+    );
     await tester.pumpAndSettle();
   }
 
   final identifier = find.byKey(const Key('login-identifier'));
   final password = find.byKey(const Key('login-password'));
-  const message = 'Minhas aulas';
+  const message = 'Aulas de hoje';
   const homeMessage = 'Identitas';
 
   testWidgets('Exibe a tela e exige os dois campos', (tester) async {
@@ -103,13 +140,19 @@ void main() {
     expect(tester.testTextInput.isVisible, isFalse);
   });
 
-  testWidgets('Professor entra e abre a lista de aulas', (tester) async {
+  testWidgets('Professor entra e abre a home com as aulas de hoje', (
+    tester,
+  ) async {
     await openLogin(tester);
     await tester.enterText(identifier, '0001');
     await tester.enterText(password, 'senha123');
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
     expect(find.text(message), findsOneWidget);
+    expect(find.text('Banco de Dados'), findsOneWidget);
+    expect(find.byKey(const Key('professor-abrir-perfil')), findsOneWidget);
+    expect(find.byKey(const Key('professor-ver-todas-aulas')), findsOneWidget);
+    expect(find.text('PRESENTE'), findsNothing);
     expect(find.text('Login'), findsNothing);
   });
 
