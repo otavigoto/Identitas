@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'professor_api.dart';
 import 'screens/nfc_instrucao_page.dart';
 import 'widgets/nfc_scaffold.dart';
 import 'services/nfc_service.dart';
@@ -14,6 +15,7 @@ class TurmaDetalhePage extends StatefulWidget {
   const TurmaDetalhePage({
     super.key,
     required this.api,
+    required this.professorApi,
     required this.turma,
     required this.onChanged,
     required this.onDeleted,
@@ -21,6 +23,7 @@ class TurmaDetalhePage extends StatefulWidget {
   });
 
   final TurmasApi api;
+  final ProfessorApi professorApi;
   final Turma turma;
   final ValueChanged<Turma> onChanged;
   final VoidCallback onDeleted;
@@ -75,7 +78,7 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Excluir aula?'),
-        content: Text('A turma "${_turma.nome}" será removida.'),
+        content: Text('A turma "${_turma.name}" será removida.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -112,21 +115,24 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
     });
   }
 
-  void _validarPresenca() {
-    Navigator.of(context).push(
+  /// Abre a chamada (janela de 5 minutos) e deixa o professor encostar os
+  /// cartões dos alunos; cada leitura marca o aluno como presente.
+  Future<void> _validarPresenca() => _executar(() async {
+    await widget.professorApi.abrirChamada(_turma.id);
+    if (!mounted) return;
+    await Navigator.of(context).push(
       nfcRoute(
         NfcInstrucaoPage(
-          nomeDisciplina: _turma.disciplina,
+          nomeDisciplina: _turma.name,
           nfcService: widget.nfcService,
-          onValidarPresenca: (_) async {
-            throw Exception(
-              'A validação de presença ainda não está conectada ao servidor.',
-            );
+          onValidarPresenca: (uid) async {
+            await widget.professorApi.presencaPorNfc(_turma.id, [uid]);
+            return true;
           },
         ),
       ),
     );
-  }
+  });
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -174,7 +180,7 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _turma.disciplina,
+                  _turma.name,
                   style: const TextStyle(
                     fontSize: 24,
                     height: 1.1,
@@ -184,9 +190,9 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(_turma.nome, style: const TextStyle(fontSize: 16)),
+                Text(_turma.week, style: const TextStyle(fontSize: 16)),
                 Text(
-                  'Semestre ${_turma.semestre}',
+                  _turma.horario,
                   style: const TextStyle(fontSize: 14, color: Colors.black54),
                 ),
               ],
@@ -209,7 +215,7 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
             children: [
               Expanded(
                 child: Text(
-                  'Alunos (${_turma.listaAlunos.length})',
+                  'Alunos (${_turma.enrolledStudents.length})',
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -231,13 +237,13 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
             ],
           ),
           const SizedBox(height: 8),
-          if (_turma.listaAlunos.isEmpty)
+          if (_turma.enrolledStudents.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(child: Text('Nenhum aluno matriculado.')),
             )
           else
-            for (final aluno in _turma.listaAlunos)
+            for (final aluno in _turma.enrolledStudents)
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text('Aluno $aluno'),
@@ -278,7 +284,7 @@ class _AlunoDialogState extends State<_AlunoDialog> {
       key: const Key('aluno-id'),
       controller: _controller,
       autofocus: true,
-      decoration: const InputDecoration(hintText: 'RA ou ID do aluno'),
+      decoration: const InputDecoration(hintText: 'ID do aluno'),
       onSubmitted: (v) => Navigator.pop(context, v.trim()),
     ),
     actions: [

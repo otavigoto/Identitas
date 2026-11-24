@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'professor_api.dart';
 import 'screens/profile_screen.dart';
 import 'services/nfc_service.dart';
 import 'turma.dart';
@@ -7,17 +8,13 @@ import 'turma_detalhe_page.dart';
 import 'turma_form_page.dart';
 import 'turmas_api.dart';
 
-/// Lista de aulas (turmas) do professor, com busca e filtro por semestre.
+/// Lista de aulas (turmas) do professor, com busca e filtro por dia.
 class TurmasPage extends StatefulWidget {
-  const TurmasPage({
-    super.key,
-    this.nfcService,
-    this.api,
-  });
+  const TurmasPage({super.key, this.api, this.professorApi, this.nfcService});
 
   final TurmasApi? api;
+  final ProfessorApi? professorApi;
   final NfcService? nfcService;
-  final TurmasApi? api;
 
   @override
   State<TurmasPage> createState() => _TurmasPageState();
@@ -29,7 +26,7 @@ class _TurmasPageState extends State<TurmasPage> {
   bool _carregando = true;
   String? _erro;
   String _busca = '';
-  String? _semestre;
+  String? _dia;
 
   @override
   void initState() {
@@ -52,17 +49,16 @@ class _TurmasPageState extends State<TurmasPage> {
     }
   }
 
-  List<String> get _semestres =>
-      (_turmas.map((t) => t.semestre).toSet().toList()..sort()).reversed
-          .toList();
+  List<String> get _dias =>
+      (_turmas.map((t) => t.week).toSet().toList()..sort());
 
   List<Turma> get _filtradas {
     final q = _busca.trim().toLowerCase();
     return _turmas.where((t) {
-      if (_semestre != null && t.semestre != _semestre) return false;
+      if (_dia != null && t.week != _dia) return false;
       return q.isEmpty ||
-          t.nome.toLowerCase().contains(q) ||
-          t.disciplina.toLowerCase().contains(q);
+          t.name.toLowerCase().contains(q) ||
+          t.week.toLowerCase().contains(q);
     }).toList();
   }
 
@@ -77,9 +73,7 @@ class _TurmasPageState extends State<TurmasPage> {
   Future<void> _nova() async {
     final criada = await Navigator.of(
       context,
-    ).push<Turma>(
-      MaterialPageRoute(builder: (_) => TurmaFormPage(api: _api)),
-    );
+    ).push<Turma>(MaterialPageRoute(builder: (_) => TurmaFormPage(api: _api)));
     if (criada != null) setState(() => _turmas = [..._turmas, criada]);
   }
 
@@ -87,6 +81,7 @@ class _TurmasPageState extends State<TurmasPage> {
     MaterialPageRoute(
       builder: (_) => TurmaDetalhePage(
         api: _api,
+        professorApi: widget.professorApi ?? ProfessorApi(),
         turma: turma,
         onChanged: _atualizar,
         onDeleted: () => _remover(turma),
@@ -98,8 +93,8 @@ class _TurmasPageState extends State<TurmasPage> {
   @override
   Widget build(BuildContext context) {
     final lista = _filtradas;
-    // Se o semestre filtrado deixou de existir (ex.: turma excluída), limpa.
-    if (_semestre != null && !_semestres.contains(_semestre)) _semestre = null;
+    // Se o dia filtrado deixou de existir (ex.: turma excluída), limpa.
+    if (_dia != null && !_dias.contains(_dia)) _dia = null;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -121,9 +116,9 @@ class _TurmasPageState extends State<TurmasPage> {
               size: 28,
             ),
             onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProfileScreen()),
-              );
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
             },
           ),
         ],
@@ -145,7 +140,7 @@ class _TurmasPageState extends State<TurmasPage> {
                 key: const Key('busca-aula'),
                 onChanged: (v) => setState(() => _busca = v),
                 decoration: InputDecoration(
-                  hintText: 'Buscar por nome ou disciplina',
+                  hintText: 'Buscar por nome ou dia da semana',
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
                   fillColor: const Color(0xFFF2F2F2),
@@ -163,17 +158,17 @@ class _TurmasPageState extends State<TurmasPage> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 children: [
-                  for (final s in _semestres)
+                  for (final s in _dias)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: FilterChip(
                         label: Text(s),
-                        selected: _semestre == s,
+                        selected: _dia == s,
                         selectedColor: const Color(0xFFF9FF2E),
                         showCheckmark: false,
                         shape: const StadiumBorder(),
                         onSelected: (sel) =>
-                            setState(() => _semestre = sel ? s : null),
+                            setState(() => _dia = sel ? s : null),
                       ),
                     ),
                 ],
@@ -241,7 +236,7 @@ class _TurmaCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    turma.disciplina,
+                    turma.name,
                     style: const TextStyle(
                       fontSize: 20,
                       height: 1.1,
@@ -251,10 +246,9 @@ class _TurmaCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(turma.nome),
+                  Text('${turma.week} · ${turma.horario}'),
                   Text(
-                    'Semestre ${turma.semestre} · '
-                    '${turma.listaAlunos.length} alunos',
+                    '${turma.enrolledStudents.length} alunos',
                     style: const TextStyle(color: Colors.black54),
                   ),
                 ],

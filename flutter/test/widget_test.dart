@@ -1,8 +1,48 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:identitas/api_client.dart';
+import 'package:identitas/auth_api.dart';
+import 'package:identitas/login_page.dart';
 import 'package:identitas/main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  /// Backend falso de `/auth`: RA `24012345` (aluno) e `0001` (professor),
+  /// senha `senha123`.
+  AuthApi fakeAuth() => AuthApi(
+    ApiClient(
+      baseUrl: 'http://api.teste',
+      httpClient: MockClient((http.Request req) async {
+        http.Response json(Object data, int status) => http.Response(
+          jsonEncode(data),
+          status,
+          headers: {'content-type': 'application/json'},
+        );
+        final body = jsonDecode(req.body) as Map<String, dynamic>;
+        if (req.url.path != '/auth' || body['password'] != 'senha123') {
+          return json({'message': 'RA ou senha inválidos.'}, 401);
+        }
+        final professor = body['ra'] == '0001';
+        return json({
+          'user': {
+            '_id': professor ? 'p1' : 'a1',
+            'name': professor ? 'Prof Teste' : 'Ana Aluna',
+            'ra': body['ra'],
+            'role': professor ? 'PROFESSOR' : 'STUDENT',
+          },
+          'accessToken': 'acc',
+          'refreshToken': 'ref',
+        }, 200);
+      }),
+    ),
+  );
+
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   Future<void> openLogin(
     WidgetTester tester, {
     Size size = const Size(402, 874),
@@ -13,7 +53,7 @@ void main() {
     tester.view.viewInsets = FakeViewPadding(bottom: keyboard);
     tester.view.padding = const FakeViewPadding(top: 62, bottom: 34);
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(MyApp(home: LoginPage(auth: fakeAuth())));
     await tester.pumpAndSettle();
   }
 
@@ -26,10 +66,10 @@ void main() {
     await openLogin(tester);
     expect(find.text('Login'), findsOneWidget);
     expect(find.byType(Image), findsOneWidget);
-    expect(find.text('Email / RA'), findsOneWidget);
+    expect(find.text('RA'), findsOneWidget);
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
-    expect(find.text('Informe seu email ou RA.'), findsOneWidget);
+    expect(find.text('Informe seu RA.'), findsOneWidget);
     expect(find.text('Informe sua senha.'), findsOneWidget);
     expect(find.text(homeMessage), findsNothing);
   });
@@ -51,19 +91,40 @@ void main() {
     expect(field().obscureText, isTrue);
   });
 
-  for (final login in ['aluno@instituicao.edu.br', '24012345']) {
-    testWidgets('Aceita $login e abre a lista de aulas', (tester) async {
-      await openLogin(tester);
-      await tester.enterText(identifier, login);
-      await tester.enterText(password, 'senha123');
-      await tester.tap(find.text('Entrar'));
-      await tester.pumpAndSettle();
-      expect(find.text(homeMessage), findsOneWidget);
-      expect(find.text(message), findsNothing);
-      expect(find.text('Login'), findsNothing);
-      expect(tester.testTextInput.isVisible, isFalse);
-    });
-  }
+  testWidgets('Aluno entra com RA e senha e abre a home', (tester) async {
+    await openLogin(tester);
+    await tester.enterText(identifier, '24012345');
+    await tester.enterText(password, 'senha123');
+    await tester.tap(find.text('Entrar'));
+    await tester.pumpAndSettle();
+    expect(find.text(homeMessage), findsOneWidget);
+    expect(find.text(message), findsNothing);
+    expect(find.text('Login'), findsNothing);
+    expect(tester.testTextInput.isVisible, isFalse);
+  });
+
+  testWidgets('Professor entra e abre a lista de aulas', (tester) async {
+    await openLogin(tester);
+    await tester.enterText(identifier, '0001');
+    await tester.enterText(password, 'senha123');
+    await tester.tap(find.text('Entrar'));
+    await tester.pumpAndSettle();
+    expect(find.text(message), findsOneWidget);
+    expect(find.text('Login'), findsNothing);
+  });
+
+  testWidgets('Senha errada mostra o erro do servidor e fica no login', (
+    tester,
+  ) async {
+    await openLogin(tester);
+    await tester.enterText(identifier, '24012345');
+    await tester.enterText(password, 'errada');
+    await tester.tap(find.text('Entrar'));
+    await tester.pumpAndSettle();
+    expect(find.text('RA ou senha inválidos.'), findsOneWidget);
+    expect(find.text('Login'), findsOneWidget);
+    expect(find.text(homeMessage), findsNothing);
+  });
 
   testWidgets('Avança e envia pelo teclado', (tester) async {
     await openLogin(tester);
@@ -86,7 +147,7 @@ void main() {
     await tester.enterText(password, 'senha123');
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
-    expect(find.text('Informe seu email ou RA.'), findsOneWidget);
+    expect(find.text('Informe seu RA.'), findsOneWidget);
     expect(find.text(message), findsNothing);
   });
 
