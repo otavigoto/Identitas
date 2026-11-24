@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'api_config.dart';
+import 'models/user_profile.dart';
 import 'screens/home_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -28,7 +30,17 @@ class _LoginPageState extends State<LoginPage> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
-    // TODO backend: autenticar antes de navegar.
+
+    final input = _identifier.text.trim().toLowerCase();
+    if (input.contains('prof') ||
+        input.contains('andre') ||
+        input == '19206582' ||
+        input == '123456') {
+      ApiConfig.currentUser = UserProfile.mockProfessor();
+    } else {
+      ApiConfig.currentUser = UserProfile.mockStudent();
+    }
+
     Navigator.of(
       context,
     ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));

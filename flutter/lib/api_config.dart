@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'models/user_profile.dart';
 
 /// Configuração de acesso à API do backend (NestJS + MongoDB).
 ///
@@ -14,6 +15,7 @@ class ApiConfig {
 
   /// TODO: preenchido com o token JWT após o login; enviado como Bearer.
   static String? token;
+  static UserProfile? currentUser;
 
   static String get baseUrl {
     if (_url.isNotEmpty) return _url;
