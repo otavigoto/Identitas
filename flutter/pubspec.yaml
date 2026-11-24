@@ -37,6 +37,9 @@ dependencies:
   flutter_svg: ^2.3.0
   nfc_manager: ^4.4.0
   http: ^1.6.0
+  shared_preferences: ^2.5.6
+  google_fonts: ^6.3.2
+  flutter_secure_storage: ^9.2.4
 
 dev_dependencies:
   flutter_test:

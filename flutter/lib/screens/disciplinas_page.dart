@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../aluno_api.dart';
+import '../api_client.dart';
+import '../models.dart';
+
+/// Disciplinas do aluno por dia da semana, com a frequência de cada uma e a
+/// geral (`GET /classes/me/weekly`).
 class DisciplinasPage extends StatefulWidget {
-  const DisciplinasPage({super.key});
+  const DisciplinasPage({super.key, this.api});
+
+  final AlunoApi? api;
 
   static const _ink = Color(0xFF1E1E1E);
   static const _accent = Color(0xFFF9FF2E);
@@ -63,7 +71,11 @@ class _EmptyDay extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.event_available_outlined, size: 44, color: Color(0xFF1E1E1E)),
+          Icon(
+            Icons.event_available_outlined,
+            size: 44,
+            color: Color(0xFF1E1E1E),
+          ),
           SizedBox(height: 12),
           Text(
             'Nenhuma disciplina',
@@ -95,38 +107,45 @@ class _DisciplinasPageState extends State<DisciplinasPage> {
     'Domingo',
   ];
 
-  final _disciplinesByDay = const [
-    [
-      ('08:00 - 09:40', 'Cálculo Diferencial', 'Lab 03 - H15', '75%'),
-      ('10:00 - 11:40', 'Engenharia de Software', 'Sala 204 - H15', '80%'),
-      ('11:40 - 12:30', 'Projeto Integrador', 'Sala A06 - H15', '67%'),
-    ],
-    [
-      ('08:00 - 09:40', 'Estrutura de Dados', 'Lab 02 - H15', '82%'),
-      ('10:00 - 11:40', 'Banco de Dados', 'Sala 105 - H15', '88%'),
-    ],
-    [
-      ('08:00 - 09:40', 'Cálculo Diferencial', 'Lab 03 - H15', '75%'),
-      ('10:00 - 11:40', 'Engenharia de Software', 'Sala 204 - H15', '80%'),
-      ('11:40 - 12:30', 'Projeto Integrador', 'Sala A06 - H15', '67%'),
-    ],
-    [
-      ('08:00 - 09:40', 'Arquitetura de Computadores', 'Lab 01 - H15', '79%'),
-      ('10:00 - 11:40', 'Interação Humano-Computador', 'Sala 302 - H15', '91%'),
-    ],
-    [
-      ('08:00 - 09:40', 'Redes de Computadores', 'Lab 04 - H15', '84%'),
-      ('10:00 - 11:40', 'Projeto Integrador', 'Sala A06 - H15', '67%'),
-    ],
-    <(String, String, String, String)>[],
-    <(String, String, String, String)>[],
-  ];
+  late final AlunoApi _api = widget.api ?? AlunoApi();
+  AulasDaSemana? _semana;
+  String? _erro;
+  bool _carregando = true;
+
+  /// Aulas agrupadas por dia (0 = segunda … 6 = domingo), em ordem de horário.
+  List<List<Aula>> get _porDia {
+    final dias = List.generate(7, (_) => <Aula>[]);
+    for (final a in _semana?.aulas ?? const <Aula>[]) {
+      final i = a.indiceDoDia;
+      if (i >= 0) dias[i].add(a);
+    }
+    for (final d in dias) {
+      d.sort((a, b) => a.startTime.compareTo(b.startTime));
+    }
+    return dias;
+  }
+
+  Future<void> _carregar() async {
+    setState(() {
+      _carregando = true;
+      _erro = null;
+    });
+    try {
+      final semana = await _api.aulasDaSemana();
+      if (mounted) setState(() => _semana = semana);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _erro = e.message);
+    } finally {
+      if (mounted) setState(() => _carregando = false);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _selectedDay = DateTime.now().weekday - 1;
     _pageController = PageController(initialPage: _selectedDay);
+    _carregar();
   }
 
   @override
@@ -154,24 +173,24 @@ class _DisciplinasPageState extends State<DisciplinasPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                Row(
-                  children: [
-                    IconButton(
-                      tooltip: 'Voltar',
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new,
-                        color: Colors.white,
+                  Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Voltar',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new,
+                          color: Colors.white,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
                       ),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 40,
-                        minHeight: 40,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
                   const Text(
                     'Disciplinas Matriculadas',
                     style: TextStyle(
@@ -181,20 +200,12 @@ class _DisciplinasPageState extends State<DisciplinasPage> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    '6º semestre',
-                    style: TextStyle(
-                      color: Color(0xFFB8B8AE),
-                      fontSize: 16,
-                      height: 22 / 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: cardWidth,
-                    child: const _GeneralFrequencyCard(),
+                    child: _GeneralFrequencyCard(
+                      percentual: _semana?.geral?.percentage,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
@@ -227,43 +238,77 @@ class _DisciplinasPageState extends State<DisciplinasPage> {
                           ),
                   ),
                   const SizedBox(height: 8),
-                  SizedBox(
-                    width: cardWidth,
-                    height: 345,
-                    child: PageView.builder(
-                      controller: _pageController,
-                      onPageChanged: (index) =>
-                          setState(() => _selectedDay = index),
-                      itemCount: _weekdays.length,
-                      itemBuilder: (context, dayIndex) {
-                        final disciplines = _disciplinesByDay[dayIndex];
-                        return Container(
-                          padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
-                          decoration: BoxDecoration(
-                            color: _accent,
-                            borderRadius: BorderRadius.circular(28),
+                  if (_carregando)
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(
+                        child: CircularProgressIndicator(color: _accent),
+                      ),
+                    )
+                  else if (_erro != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _erro!,
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                        const SizedBox(height: 8),
+                        FilledButton(
+                          key: const Key('disciplinas-tentar-novamente'),
+                          onPressed: _carregar,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _accent,
+                            foregroundColor: Colors.black,
                           ),
-                          child: disciplines.isEmpty
-                              ? const _EmptyDay()
-                              : ListView.separated(
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: disciplines.length,
-                                  separatorBuilder: (_, _) =>
-                                      const SizedBox(height: 10),
-                                  itemBuilder: (context, index) {
-                                    final item = disciplines[index];
-                                    return _DisciplineFrequencyCard(
-                                      time: item.$1,
-                                      name: item.$2,
-                                      room: item.$3,
-                                      frequency: item.$4,
-                                    );
-                                  },
-                                ),
-                        );
-                      },
+                          child: const Text('Tentar novamente'),
+                        ),
+                      ],
+                    )
+                  else
+                    SizedBox(
+                      width: cardWidth,
+                      height: 345,
+                      child: PageView.builder(
+                        controller: _pageController,
+                        onPageChanged: (index) =>
+                            setState(() => _selectedDay = index),
+                        itemCount: _weekdays.length,
+                        itemBuilder: (context, dayIndex) {
+                          final disciplines = _porDia[dayIndex];
+                          return Container(
+                            padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+                            decoration: BoxDecoration(
+                              color: _accent,
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                            child: disciplines.isEmpty
+                                ? const _EmptyDay()
+                                : ListView.separated(
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: disciplines.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(height: 10),
+                                    itemBuilder: (context, index) {
+                                      final item = disciplines[index];
+                                      final freq = item.frequencia;
+                                      return _DisciplineFrequencyCard(
+                                        time: item.horario,
+                                        name: item.name,
+                                        room: freq == null
+                                            ? item.week
+                                            : '${freq.present}/${freq.lessons} presenças',
+                                        frequency: freq == null
+                                            ? '--'
+                                            : '${freq.percentage.round()}%',
+                                      );
+                                    },
+                                  ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
                 ],
               ),
             );
@@ -275,10 +320,14 @@ class _DisciplinasPageState extends State<DisciplinasPage> {
 }
 
 class _GeneralFrequencyCard extends StatelessWidget {
-  const _GeneralFrequencyCard();
+  const _GeneralFrequencyCard({required this.percentual});
+
+  /// 0 a 100; null enquanto não carregou.
+  final double? percentual;
 
   @override
   Widget build(BuildContext context) {
+    final valor = percentual;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -286,10 +335,10 @@ class _GeneralFrequencyCard extends StatelessWidget {
         color: DisciplinasPage._accent,
         borderRadius: BorderRadius.circular(28),
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          const Text(
             'Frequência geral',
             style: TextStyle(
               color: DisciplinasPage._ink,
@@ -299,16 +348,16 @@ class _GeneralFrequencyCard extends StatelessWidget {
             ),
           ),
           Text(
-            '85%',
-            style: TextStyle(
+            valor == null ? '--' : '${valor.round()}%',
+            style: const TextStyle(
               color: DisciplinasPage._ink,
               fontSize: 65,
               height: 70 / 65,
               fontWeight: FontWeight.bold,
             ),
           ),
-          Text(
-            'Acumulada no semestre',
+          const Text(
+            'Acumulada nas disciplinas',
             style: TextStyle(
               color: DisciplinasPage._ink,
               fontSize: 13,
@@ -316,9 +365,9 @@ class _GeneralFrequencyCard extends StatelessWidget {
               fontWeight: FontWeight.w500,
             ),
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           LinearProgressIndicator(
-            value: 0.85,
+            value: (valor ?? 0) / 100,
             minHeight: 6,
             borderRadius: BorderRadius.all(Radius.circular(3)),
             color: DisciplinasPage._ink,
@@ -385,7 +434,7 @@ class _DisciplineFrequencyCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(
-                      Icons.location_on,
+                      Icons.event,
                       size: 14,
                       color: DisciplinasPage._ink,
                     ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'models.dart';
+import 'professor_api.dart';
 import 'screens/nfc_instrucao_page.dart';
 import 'widgets/nfc_scaffold.dart';
 import 'services/nfc_service.dart';
@@ -14,6 +16,7 @@ class TurmaDetalhePage extends StatefulWidget {
   const TurmaDetalhePage({
     super.key,
     required this.api,
+    required this.professorApi,
     required this.turma,
     required this.onChanged,
     required this.onDeleted,
@@ -21,6 +24,7 @@ class TurmaDetalhePage extends StatefulWidget {
   });
 
   final TurmasApi api;
+  final ProfessorApi professorApi;
   final Turma turma;
   final ValueChanged<Turma> onChanged;
   final VoidCallback onDeleted;
@@ -34,9 +38,64 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
   late Turma _turma = widget.turma;
   bool _ocupado = false;
 
+  /// Nome e RA dos matriculados, por ID (`GET /classes/:id/students`).
+  Map<String, AlunoChamada> _nomes = {};
+
+  /// Quantos matriculados que não existem mais foram tirados da turma
+  /// automaticamente ao abrir esta tela.
+  int _removidos = 0;
+
+  /// Erro ao buscar os nomes (ex.: sem conexão).
+  String? _avisoAlunos;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarNomes();
+  }
+
+  Future<void> _carregarNomes() async {
+    if (_turma.enrolledStudents.isEmpty) {
+      if (mounted) setState(() => _nomes = {});
+      return;
+    }
+    try {
+      final lista = await widget.professorApi.listaChamada(_turma.id);
+      if (!mounted) return;
+      setState(() {
+        _nomes = {for (final a in lista.alunos) a.id: a};
+        _avisoAlunos = null;
+      });
+      if (lista.ausentes.isNotEmpty) await _removerAusentes(lista.ausentes);
+    } on ApiException catch (e) {
+      // A lista continua funcionando com os IDs, para dar para remover.
+      if (mounted) setState(() => _avisoAlunos = e.message);
+    }
+  }
+
+  /// Tira da turma os matriculados que o backend diz não existirem mais.
+  Future<void> _removerAusentes(List<String> ids) async {
+    var turma = _turma;
+    for (final id in ids) {
+      turma = await widget.api.removerAluno(turma.id, id);
+    }
+    if (!mounted) return;
+    setState(() {
+      _turma = turma;
+      _removidos = ids.length;
+    });
+    widget.onChanged(turma);
+  }
+
   void _atualizar(Turma nova) {
-    setState(() => _turma = nova);
+    final mudouAlunos =
+        nova.enrolledStudents.join(',') != _turma.enrolledStudents.join(',');
+    setState(() {
+      _turma = nova;
+      if (mudouAlunos) _removidos = 0;
+    });
     widget.onChanged(nova);
+    if (mudouAlunos) _carregarNomes();
   }
 
   void _erro(Object e) {
@@ -75,7 +134,7 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Excluir aula?'),
-        content: Text('A turma "${_turma.nome}" será removida.'),
+        content: Text('A turma "${_turma.name}" será removida.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -101,32 +160,24 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
     _atualizar(await widget.api.removerAluno(_turma.id, alunoId));
   });
 
-  Future<void> _adicionar() async {
-    final alunoId = await showDialog<String>(
-      context: context,
-      builder: (_) => const _AlunoDialog(),
-    );
-    if (alunoId == null || alunoId.isEmpty) return;
-    await _executar(() async {
-      _atualizar(await widget.api.adicionarAluno(_turma.id, alunoId));
-    });
-  }
-
-  void _validarPresenca() {
-    Navigator.of(context).push(
+  /// Abre a chamada (janela de 5 minutos) e deixa o professor encostar os
+  /// cartões dos alunos; cada leitura marca o aluno como presente.
+  Future<void> _validarPresenca() => _executar(() async {
+    await widget.professorApi.abrirChamada(_turma.id);
+    if (!mounted) return;
+    await Navigator.of(context).push(
       nfcRoute(
         NfcInstrucaoPage(
-          nomeDisciplina: _turma.disciplina,
+          nomeDisciplina: _turma.name,
           nfcService: widget.nfcService,
-          onValidarPresenca: (_) async {
-            throw Exception(
-              'A validação de presença ainda não está conectada ao servidor.',
-            );
+          onValidarPresenca: (uid) async {
+            await widget.professorApi.presencaPorNfc(_turma.id, [uid]);
+            return true;
           },
         ),
       ),
     );
-  }
+  });
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -174,7 +225,7 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _turma.disciplina,
+                  _turma.name,
                   style: const TextStyle(
                     fontSize: 24,
                     height: 1.1,
@@ -184,9 +235,9 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(_turma.nome, style: const TextStyle(fontSize: 16)),
+                Text(_turma.week, style: const TextStyle(fontSize: 16)),
                 Text(
-                  'Semestre ${_turma.semestre}',
+                  _turma.horario,
                   style: const TextStyle(fontSize: 14, color: Colors.black54),
                 ),
               ],
@@ -205,92 +256,53 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
             ),
           ),
           const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Alunos (${_turma.listaAlunos.length})',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -1.4,
-                  ),
-                ),
-              ),
-              FilledButton.icon(
-                key: const Key('adicionar-aluno'),
-                onPressed: _ocupado ? null : _adicionar,
-                icon: const Icon(Icons.person_add_alt, size: 18),
-                label: const Text('Adicionar'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E1E1E),
-                  foregroundColor: Colors.white,
-                  shape: const StadiumBorder(),
-                ),
-              ),
-            ],
+          Text(
+            'Alunos (${_turma.enrolledStudents.length})',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -1.4,
+            ),
           ),
           const SizedBox(height: 8),
-          if (_turma.listaAlunos.isEmpty)
+          if (_removidos > 0 || _avisoAlunos != null)
+            Container(
+              key: const Key('aviso-alunos'),
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0x22E53935),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                _avisoAlunos ??
+                    (_removidos == 1
+                        ? '1 aluno removido, não encontrado.'
+                        : '$_removidos alunos removidos, não encontrados.'),
+              ),
+            ),
+          if (_turma.enrolledStudents.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(child: Text('Nenhum aluno matriculado.')),
             )
           else
-            for (final aluno in _turma.listaAlunos)
+            for (final id in _turma.enrolledStudents)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text('Aluno $aluno'),
+                // Enquanto os nomes carregam (ou se falharem), mostra o ID.
+                title: Text(_nomes[id]?.name ?? 'Aluno $id'),
+                subtitle: _nomes[id] == null
+                    ? null
+                    : Text('RA ${_nomes[id]!.ra}'),
                 trailing: IconButton(
-                  tooltip: 'Remover $aluno',
-                  onPressed: _ocupado ? null : () => _remover(aluno),
+                  tooltip: 'Remover ${_nomes[id]?.name ?? id}',
+                  onPressed: _ocupado ? null : () => _remover(id),
                   icon: const Icon(Icons.remove_circle_outline),
                 ),
               ),
         ],
       ),
     ),
-  );
-}
-
-/// Pede o RA/ID do aluno. Tem o próprio controller para ele ser descartado
-/// só depois da animação de saída do diálogo.
-class _AlunoDialog extends StatefulWidget {
-  const _AlunoDialog();
-
-  @override
-  State<_AlunoDialog> createState() => _AlunoDialogState();
-}
-
-class _AlunoDialogState extends State<_AlunoDialog> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Adicionar aluno'),
-    content: TextField(
-      key: const Key('aluno-id'),
-      controller: _controller,
-      autofocus: true,
-      decoration: const InputDecoration(hintText: 'RA ou ID do aluno'),
-      onSubmitted: (v) => Navigator.pop(context, v.trim()),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancelar'),
-      ),
-      TextButton(
-        key: const Key('confirmar-aluno'),
-        onPressed: () => Navigator.pop(context, _controller.text.trim()),
-        child: const Text('Adicionar'),
-      ),
-    ],
   );
 }

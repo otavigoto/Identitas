@@ -1,10 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'auth_api.dart';
+import 'screens/cadastro_screen.dart';
 import 'screens/home_page.dart';
+import 'turmas_api.dart';
+import 'turmas_page.dart';
+
+/// Tela inicial de cada perfil: aluno vê a home com as aulas do dia e
+/// professor vê a lista de turmas.
+Widget telaInicialPara(String? role) =>
+    role == 'PROFESSOR' ? const TurmasPage() : const HomePage();
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.auth});
+
+  final AuthApi? auth;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -15,7 +26,12 @@ class _LoginPageState extends State<LoginPage> {
   final _identifier = TextEditingController();
   final _password = TextEditingController();
   final _passwordFocus = FocusNode();
+  late final AuthApi _auth = widget.auth ?? AuthApi();
   bool _obscurePassword = true;
+  bool _entrando = false;
+
+  /// Mensagem de erro do login, mostrada abaixo do formulário.
+  String? _erro;
 
   @override
   void dispose() {
@@ -25,13 +41,26 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _submit() async {
+    if (_entrando || !_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
-    // TODO backend: autenticar antes de navegar.
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
+    setState(() {
+      _entrando = true;
+      _erro = null;
+    });
+    try {
+      final usuario = await _auth.login(_identifier.text, _password.text);
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => telaInicialPara(usuario.role)),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _entrando = false;
+        _erro = e.message;
+      });
+    }
   }
 
   InputDecoration _decoration(String hint, {Widget? suffix}) => InputDecoration(
@@ -90,19 +119,19 @@ class _LoginPageState extends State<LoginPage> {
             children: [
               const Padding(
                 padding: EdgeInsets.only(left: 8),
-                child: Text('Email / RA', style: labelStyle),
+                child: Text('RA', style: labelStyle),
               ),
               TextFormField(
                 key: const Key('login-identifier'),
                 controller: _identifier,
                 style: inputStyle,
-                decoration: _decoration('ex: seuemail@instituicao.edu.br'),
+                decoration: _decoration('ex: 24012345'),
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.username],
                 autocorrect: false,
                 onFieldSubmitted: (_) => _passwordFocus.requestFocus(),
                 validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Informe seu email ou RA.'
+                    ? 'Informe seu RA.'
                     : null,
               ),
               const SizedBox(height: 4),
@@ -219,13 +248,42 @@ class _LoginPageState extends State<LoginPage> {
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: _form(),
                       ),
+                      if (_erro != null) ...[
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            _erro!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Color(0xFFB00020),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 32),
                       const Spacer(),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CadastroScreen(),
+                          ),
+                        ),
+                        child: const Text(
+                          'Criar cadastro',
+                          style: TextStyle(
+                            color: Color(0xFF1E1E1E),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       SizedBox(
                         width: 165,
                         height: 51,
                         child: FilledButton(
-                          onPressed: _submit,
+                          onPressed: _entrando ? null : _submit,
                           style: FilledButton.styleFrom(
                             backgroundColor: const Color(0xFF1E1E1E),
                             foregroundColor: Colors.white,
@@ -237,7 +295,15 @@ class _LoginPageState extends State<LoginPage> {
                                   letterSpacing: -1.4,
                                 ),
                           ),
-                          child: const Text('Entrar'),
+                          child: _entrando
+                              ? const SizedBox.square(
+                                  dimension: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Entrar'),
                         ),
                       ),
                       const SizedBox(height: 30),

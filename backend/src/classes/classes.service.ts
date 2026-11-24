@@ -245,7 +245,8 @@ export class ClassesService {
     const record = foundClass.attendanceList.find(
       (item) => this.getDateKey(item.date) === dayKey,
     );
-    const students = await this.getClassStudents(foundClass);
+    const { students, missingStudentIds } =
+      await this.getClassStudents(foundClass);
     const presentIds = new Set(
       record?.students
         .filter((item) => item.present)
@@ -268,13 +269,15 @@ export class ClassesService {
       present,
       absent: studentList.length - present,
       students: studentList,
+      missingStudents: this.toMissingStudents(missingStudentIds),
     };
   }
 
   async getAllAttendanceList(id: string, teacherId: string) {
     const foundClass = await this.findOne(id);
     this.assertClassTeacher(foundClass, teacherId);
-    const students = await this.getClassStudents(foundClass);
+    const { students, missingStudentIds } =
+      await this.getClassStudents(foundClass);
     const roster = students.map((student) => {
       const history = foundClass.attendanceList
         .map((record) => ({
@@ -320,6 +323,7 @@ export class ClassesService {
         percentage: this.getPercentage(presentAttendance, totalAttendance),
       },
       students: roster,
+      missingStudents: this.toMissingStudents(missingStudentIds),
     };
   }
 
@@ -444,10 +448,8 @@ export class ClassesService {
       throw new BadRequestException('A lista de alunos não pode estar vazia.');
     }
 
-    studentIds.forEach((studentId) =>
-      this.validateReference(studentId, 'Aluno'),
-    );
-
+    // Sem validar o formato do ID de propósito: matrículas antigas com ID
+    // malformado precisam poder ser removidas da turma.
     const updatedClass = await this.classModel
       .findByIdAndUpdate(
         id,
@@ -521,20 +523,30 @@ export class ClassesService {
   }
 
   private async getClassStudents(foundClass: ClassDocument) {
-    foundClass.enrolledStudents.forEach((studentId) =>
-      this.validateReference(studentId, 'Aluno'),
+    // IDs malformados (que não são ObjectId) também contam como "não
+    // encontrado" e não vão para a consulta, que falharia com CastError.
+    const validIds = foundClass.enrolledStudents.filter((studentId) =>
+      isValidObjectId(studentId),
     );
     const students = await this.userModel
-      .find({ _id: { $in: foundClass.enrolledStudents } })
+      .find({ _id: { $in: validIds } })
       .select('_id name ra nfcUid')
       .sort({ name: 1 })
       .exec();
-    if (students.length !== foundClass.enrolledStudents.length) {
-      throw new NotFoundException(
-        'Há alunos matriculados sem usuário correspondente.',
-      );
-    }
-    return students;
+    // Matriculados que não existem mais como usuário não derrubam a consulta:
+    // voltam em `missingStudentIds` para o cliente avisar e permitir remover.
+    const foundIds = new Set(students.map((student) => student._id.toString()));
+    const missingStudentIds = foundClass.enrolledStudents.filter(
+      (studentId) => !foundIds.has(studentId),
+    );
+    return { students, missingStudentIds };
+  }
+
+  private toMissingStudents(missingStudentIds: string[]) {
+    return missingStudentIds.map((id) => ({
+      id,
+      message: 'Aluno não encontrado.',
+    }));
   }
 
   private assertClassTeacher(foundClass: ClassDocument, teacherId: string) {

@@ -2,12 +2,15 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:identitas/services/nfc_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:identitas/api_client.dart';
+import 'package:identitas/professor_api.dart';
+import 'package:identitas/services/nfc_service.dart';
 import 'package:identitas/turmas_api.dart';
 import 'package:identitas/turmas_page.dart';
 import 'package:nfc_manager/nfc_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _NfcIndisponivel extends NfcService {
   @override
@@ -29,12 +32,19 @@ class _NfcAguardandoCartao extends NfcService {
 class FakeBackend {
   FakeBackend() {
     turmas = [
-      _turma('1', 'Turma A - Noite', 'Projeto Integrador VI', '2026.2', [
+      _turma('1', 'Projeto Integrador VI', 'Segunda-feira', '19:00', '22:30', [
         '24012345',
         '24012346',
       ]),
-      _turma('2', 'Turma B - Manhã', 'Banco de Dados', '2026.2', []),
-      _turma('3', 'Turma A - Manhã', 'Redes de Computadores', '2026.1', []),
+      _turma('2', 'Banco de Dados', 'Terça-feira', '08:00', '09:40', []),
+      _turma(
+        '3',
+        'Redes de Computadores',
+        'Quarta-feira',
+        '10:00',
+        '11:40',
+        [],
+      ),
     ];
   }
 
@@ -42,23 +52,32 @@ class FakeBackend {
   int _proximoId = 10;
   bool offline = false;
 
+  /// IDs matriculados que não existem mais como usuário (vêm em
+  /// `missingStudents`).
+  final Set<String> alunosOrfaos = {};
+  final List<http.Request> requisicoes = [];
+
   static Map<String, dynamic> _turma(
     String id,
-    String nome,
-    String disciplina,
-    String semestre,
+    String name,
+    String week,
+    String inicio,
+    String fim,
     List<String> alunos,
   ) => {
     '_id': id,
-    'nome': nome,
-    'disciplina': disciplina,
-    'semestre': semestre,
+    'name': name,
     'id_professor': 'prof1',
-    'listaAlunos': alunos,
+    'week': week,
+    'startTime': inicio,
+    'endTime': fim,
+    'attendanceStatus': 'closed',
+    'enrolledStudents': alunos,
   };
 
   Future<http.Response> handle(http.Request req) async {
     if (offline) throw http.ClientException('sem conexão');
+    requisicoes.add(req);
     final partes = req.url.pathSegments; // ex.: [classes, 1, students, 24]
     final body = req.body.isEmpty ? null : jsonDecode(req.body);
 
@@ -81,9 +100,10 @@ class FakeBackend {
     if (req.method == 'POST' && partes.length == 1) {
       final nova = _turma(
         '${_proximoId++}',
-        body['nome'] as String,
-        body['disciplina'] as String,
-        body['semestre'] as String,
+        body['name'] as String,
+        body['week'] as String,
+        body['startTime'] as String,
+        body['endTime'] as String,
         [],
       );
       turmas.add(nova);
@@ -93,6 +113,13 @@ class FakeBackend {
     if (turma == null) {
       return json({'message': 'Turma não encontrada.'}, 404);
     }
+    if (req.method == 'PATCH' && partes.length == 4 && partes[3] == 'open') {
+      turma['attendanceStatus'] = 'open';
+      return json(turma);
+    }
+    if (req.method == 'POST' && partes.length == 5 && partes[4] == 'nfc') {
+      return json(turma);
+    }
     if (req.method == 'PATCH') {
       turma.addAll((body as Map).cast<String, dynamic>());
       return json(turma);
@@ -101,9 +128,47 @@ class FakeBackend {
       turmas.remove(turma);
       return json(turma);
     }
-    final alunos = (turma['listaAlunos'] as List).cast<String>();
+    final alunos = (turma['enrolledStudents'] as List).cast<String>();
+    if (req.method == 'GET' && partes.length == 3 && partes[2] == 'students') {
+      final encontrados = [
+        for (final id in alunos)
+          if (!alunosOrfaos.contains(id)) id,
+      ];
+      return json({
+        'missingStudents': [
+          for (final id in alunos)
+            if (alunosOrfaos.contains(id))
+              {'id': id, 'message': 'Aluno não encontrado.'},
+        ],
+        'class': {
+          'id': turma['_id'],
+          'name': turma['name'],
+          'id_professor': 'prof1',
+          'week': turma['week'],
+          'startTime': turma['startTime'],
+          'endTime': turma['endTime'],
+        },
+        'date': '2026-11-23T00:00:00.000Z',
+        'attendanceRecorded': false,
+        'totalStudents': encontrados.length,
+        'present': 0,
+        'absent': encontrados.length,
+        'students': [
+          for (final id in encontrados)
+            {
+              'id': id,
+              'name': 'Nome $id',
+              'ra': id,
+              'nfcUid': null,
+              'present': false,
+            },
+        ],
+      });
+    }
     if (req.method == 'POST' && partes[2] == 'students') {
-      if (!alunos.contains(body['alunoId'])) alunos.add(body['alunoId']);
+      for (final id in (body['enrolledStudents'] as List).cast<String>()) {
+        if (!alunos.contains(id)) alunos.add(id);
+      }
       return json(turma);
     }
     if (req.method == 'DELETE' && partes[2] == 'students') {
@@ -113,6 +178,17 @@ class FakeBackend {
     return json({'message': 'Rota inesperada'}, 500);
   }
 }
+
+ApiClient clienteDe(FakeBackend backend, {String? professorId = 'prof1'}) =>
+    ApiClient(
+      httpClient: MockClient(backend.handle),
+      baseUrl: 'http://api.teste',
+      session: Session()
+        ..accessToken = 'token-teste'
+        ..refreshToken = 'refresh-teste'
+        ..userId = professorId
+        ..role = 'PROFESSOR',
+    );
 
 void main() {
   late FakeBackend backend;
@@ -125,22 +201,23 @@ void main() {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = size;
     addTearDown(tester.view.reset);
+    final client = clienteDe(backend);
     await tester.pumpWidget(
       MaterialApp(
         home: TurmasPage(
           nfcService: nfcService,
-          api: TurmasApi(
-            client: MockClient(backend.handle),
-            baseUrl: 'http://api.teste',
-            professorId: 'prof1',
-          ),
+          api: TurmasApi(client),
+          professorApi: ProfessorApi(client),
         ),
       ),
     );
     await tester.pumpAndSettle();
   }
 
-  setUp(() => backend = FakeBackend());
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    backend = FakeBackend();
+  });
 
   testWidgets('Carrega as aulas vindas da API', (tester) async {
     await abrirLista(tester);
@@ -162,21 +239,17 @@ void main() {
     expect(find.text('Projeto Integrador VI'), findsOneWidget);
   });
 
-  testWidgets('Avisa quando o professor não está definido', (tester) async {
+  testWidgets('Avisa quando não há professor logado', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(402, 874);
     addTearDown(tester.view.reset);
-    final api = TurmasApi(
-      client: MockClient(backend.handle),
-      baseUrl: 'http://api.teste',
-      professorId: '',
-    );
+    final api = TurmasApi(clienteDe(backend, professorId: null));
     await tester.pumpWidget(MaterialApp(home: TurmasPage(api: api)));
     await tester.pumpAndSettle();
-    expect(find.textContaining('PROFESSOR_ID'), findsOneWidget);
+    expect(find.text('Faça login para continuar.'), findsOneWidget);
   });
 
-  testWidgets('Busca por disciplina e mostra estado vazio', (tester) async {
+  testWidgets('Busca por nome e mostra estado vazio', (tester) async {
     await abrirLista(tester);
     await tester.enterText(find.byKey(const Key('busca-aula')), 'banco');
     await tester.pumpAndSettle();
@@ -188,13 +261,13 @@ void main() {
     expect(find.text('Nenhuma aula encontrada.'), findsOneWidget);
   });
 
-  testWidgets('Filtra por semestre', (tester) async {
+  testWidgets('Filtra por dia da semana', (tester) async {
     await abrirLista(tester);
-    await tester.tap(find.widgetWithText(FilterChip, '2026.1'));
+    await tester.tap(find.widgetWithText(FilterChip, 'Quarta-feira'));
     await tester.pumpAndSettle();
     expect(find.text('Redes de Computadores'), findsOneWidget);
     expect(find.text('Banco de Dados'), findsNothing);
-    await tester.tap(find.widgetWithText(FilterChip, '2026.1'));
+    await tester.tap(find.widgetWithText(FilterChip, 'Quarta-feira'));
     await tester.pumpAndSettle();
     expect(find.text('Banco de Dados'), findsOneWidget);
   });
@@ -207,21 +280,31 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('turma-salvar')));
     await tester.pumpAndSettle();
-    expect(find.text('Informe o nome da turma.'), findsOneWidget);
     expect(find.text('Informe a disciplina.'), findsOneWidget);
-    expect(find.text('Informe o semestre.'), findsOneWidget);
+    expect(find.text('Informe o dia da semana.'), findsOneWidget);
+    expect(find.text('Informe o horário de início.'), findsOneWidget);
+    expect(find.text('Informe o horário de fim.'), findsOneWidget);
 
-    await tester.enterText(find.byKey(const Key('turma-nome')), 'Turma Z');
-    await tester.enterText(
-      find.byKey(const Key('turma-disciplina')),
-      'Compiladores',
-    );
-    await tester.enterText(find.byKey(const Key('turma-semestre')), '2026.2');
+    await tester.enterText(find.byKey(const Key('turma-nome')), 'Compiladores');
+    await tester.enterText(find.byKey(const Key('turma-dia')), 'Sexta-feira');
+    await tester.enterText(find.byKey(const Key('turma-inicio')), '8h');
+    await tester.enterText(find.byKey(const Key('turma-fim')), '09:40');
+    await tester.tap(find.byKey(const Key('turma-salvar')));
+    await tester.pumpAndSettle();
+    expect(find.text('Use o formato HH:mm (ex: 08:30).'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('turma-inicio')), '08:00');
     await tester.tap(find.byKey(const Key('turma-salvar')));
     await tester.pumpAndSettle();
     expect(find.text('Minhas aulas'), findsOneWidget);
     expect(find.text('Compiladores'), findsOneWidget);
-    expect(backend.turmas.any((t) => t['disciplina'] == 'Compiladores'), true);
+    final enviada = jsonDecode(
+      backend.requisicoes.lastWhere((r) => r.method == 'POST').body,
+    );
+    expect(enviada['id_professor'], 'prof1');
+    expect(enviada['attendanceStatus'], 'closed');
+    expect(enviada['startTime'], '08:00');
+    expect(backend.turmas.any((t) => t['name'] == 'Compiladores'), true);
   });
 
   testWidgets('Edita uma aula pelo detalhe', (tester) async {
@@ -233,13 +316,13 @@ void main() {
     await tester.tap(find.byTooltip('Editar aula'));
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.byKey(const Key('turma-disciplina')),
+      find.byKey(const Key('turma-nome')),
       'Banco de Dados II',
     );
     await tester.tap(find.byKey(const Key('turma-salvar')));
     await tester.pumpAndSettle();
     expect(find.text('Banco de Dados II'), findsOneWidget);
-    expect(backend.turmas[1]['disciplina'], 'Banco de Dados II');
+    expect(backend.turmas[1]['name'], 'Banco de Dados II');
 
     await tester.pageBack();
     await tester.pumpAndSettle();
@@ -247,7 +330,7 @@ void main() {
   });
 
   testWidgets(
-    'Abre o fluxo NFC do detalhe e informa quando não está disponível',
+    'Abre a chamada e o fluxo NFC do detalhe; avisa se NFC indisponível',
     (tester) async {
       await abrirLista(tester, nfcService: _NfcIndisponivel());
       await tester.tap(find.text('Projeto Integrador VI'));
@@ -255,6 +338,13 @@ void main() {
       await tester.tap(find.byKey(const Key('validar-presenca')));
       await tester.pumpAndSettle();
 
+      expect(
+        backend.requisicoes.any(
+          (r) =>
+              r.method == 'PATCH' && r.url.path == '/classes/1/attendance/open',
+        ),
+        isTrue,
+      );
       expect(
         find.text(
           'NFC indisponível neste dispositivo. Use um aparelho compatível e tente novamente.',
@@ -282,26 +372,68 @@ void main() {
     expect(find.text('Detalhe da aula'), findsOneWidget);
   });
 
-  testWidgets('Adiciona e remove alunos', (tester) async {
+  testWidgets('Lista alunos com nome e RA, remove um e não oferece adicionar', (
+    tester,
+  ) async {
+    await abrirLista(tester);
+    await tester.tap(find.text('Projeto Integrador VI'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alunos (2)'), findsOneWidget);
+    expect(find.text('Nome 24012345'), findsOneWidget);
+    expect(find.text('RA 24012345'), findsOneWidget);
+    expect(find.text('Aluno 24012345'), findsNothing);
+    expect(find.byKey(const Key('adicionar-aluno')), findsNothing);
+    expect(find.text('Adicionar'), findsNothing);
+
+    await tester.tap(find.byTooltip('Remover Nome 24012345'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alunos (1)'), findsOneWidget);
+    expect(find.text('Nome 24012345'), findsNothing);
+    expect(backend.turmas[0]['enrolledStudents'], ['24012346']);
+  });
+
+  testWidgets('Turma sem alunos mostra o estado vazio', (tester) async {
     await abrirLista(tester);
     await tester.tap(find.text('Banco de Dados'));
     await tester.pumpAndSettle();
     expect(find.text('Alunos (0)'), findsOneWidget);
     expect(find.text('Nenhum aluno matriculado.'), findsOneWidget);
+  });
 
-    await tester.tap(find.byKey(const Key('adicionar-aluno')));
+  testWidgets('Remove sozinho o aluno que não existe mais e avisa', (
+    tester,
+  ) async {
+    backend.alunosOrfaos.add('24012345');
+    await abrirLista(tester);
+    await tester.tap(find.text('Projeto Integrador VI'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('aluno-id')), '24099999');
-    await tester.tap(find.byKey(const Key('confirmar-aluno')));
-    await tester.pumpAndSettle();
+
+    expect(find.text('1 aluno removido, não encontrado.'), findsOneWidget);
     expect(find.text('Alunos (1)'), findsOneWidget);
-    expect(find.text('Aluno 24099999'), findsOneWidget);
-    expect(backend.turmas[1]['listaAlunos'], ['24099999']);
+    expect(find.textContaining('24012345'), findsNothing);
+    expect(find.text('Nome 24012346'), findsOneWidget);
+    expect(find.text('RA 24012346'), findsOneWidget);
+    expect(backend.turmas[0]['enrolledStudents'], ['24012346']);
+  });
 
-    await tester.tap(find.byTooltip('Remover 24099999'));
+  testWidgets('Remove vários ausentes e conta no aviso', (tester) async {
+    backend.alunosOrfaos.addAll(['24012345', '24012346']);
+    await abrirLista(tester);
+    await tester.tap(find.text('Projeto Integrador VI'));
     await tester.pumpAndSettle();
+
+    expect(find.text('2 alunos removidos, não encontrados.'), findsOneWidget);
     expect(find.text('Alunos (0)'), findsOneWidget);
-    expect(backend.turmas[1]['listaAlunos'], isEmpty);
+    expect(find.text('Nenhum aluno matriculado.'), findsOneWidget);
+    expect(backend.turmas[0]['enrolledStudents'], isEmpty);
+  });
+
+  testWidgets('Sem alunos ausentes não mostra aviso', (tester) async {
+    await abrirLista(tester);
+    await tester.tap(find.text('Projeto Integrador VI'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('aviso-alunos')), findsNothing);
+    expect(find.text('Alunos (2)'), findsOneWidget);
   });
 
   testWidgets('Exclui uma aula após confirmar', (tester) async {

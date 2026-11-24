@@ -18,11 +18,12 @@ class TurmaFormPage extends StatefulWidget {
 
 class _TurmaFormPageState extends State<TurmaFormPage> {
   final _formKey = GlobalKey<FormState>();
-  late final _nome = TextEditingController(text: widget.turma?.nome);
-  late final _disciplina = TextEditingController(
-    text: widget.turma?.disciplina,
-  );
-  late final _semestre = TextEditingController(text: widget.turma?.semestre);
+  late final _nome = TextEditingController(text: widget.turma?.name);
+  late final _dia = TextEditingController(text: widget.turma?.week);
+  late final _inicio = TextEditingController(text: widget.turma?.startTime);
+  late final _fim = TextEditingController(text: widget.turma?.endTime);
+
+  static final _horaValida = RegExp(r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$');
 
   bool _salvando = false;
 
@@ -31,8 +32,9 @@ class _TurmaFormPageState extends State<TurmaFormPage> {
   @override
   void dispose() {
     _nome.dispose();
-    _disciplina.dispose();
-    _semestre.dispose();
+    _dia.dispose();
+    _inicio.dispose();
+    _fim.dispose();
     super.dispose();
   }
 
@@ -40,21 +42,24 @@ class _TurmaFormPageState extends State<TurmaFormPage> {
     if (_salvando || !_formKey.currentState!.validate()) return;
     final atual = widget.turma;
     final nome = _nome.text.trim();
-    final disciplina = _disciplina.text.trim();
-    final semestre = _semestre.text.trim();
+    final dia = _dia.text.trim();
+    final inicio = _inicio.text.trim();
+    final fim = _fim.text.trim();
     setState(() => _salvando = true);
     try {
       final resultado = atual == null
           ? await widget.api.criar(
-              nome: nome,
-              disciplina: disciplina,
-              semestre: semestre,
+              name: nome,
+              week: dia,
+              startTime: inicio,
+              endTime: fim,
             )
           : await widget.api.atualizar(
               atual.id,
-              nome: nome,
-              disciplina: disciplina,
-              semestre: semestre,
+              name: nome,
+              week: dia,
+              startTime: inicio,
+              endTime: fim,
             );
       if (mounted) Navigator.of(context).pop(resultado);
     } on ApiException catch (e) {
@@ -69,12 +74,21 @@ class _TurmaFormPageState extends State<TurmaFormPage> {
   String? _obrigatorio(String? v, String campo) =>
       v == null || v.trim().isEmpty ? 'Informe $campo.' : null;
 
+  String? _hora(String? v, String campo) {
+    final vazio = _obrigatorio(v, campo);
+    if (vazio != null) return vazio;
+    return _horaValida.hasMatch(v!.trim())
+        ? null
+        : 'Use o formato HH:mm (ex: 08:30).';
+  }
+
   Widget _campo({
     required Key key,
     required String label,
     required String hint,
     required TextEditingController controller,
     required String erro,
+    bool hora = false,
     TextInputAction action = TextInputAction.next,
     VoidCallback? onSubmit,
   }) => Column(
@@ -97,7 +111,7 @@ class _TurmaFormPageState extends State<TurmaFormPage> {
         controller: controller,
         textInputAction: action,
         onFieldSubmitted: onSubmit == null ? null : (_) => onSubmit(),
-        validator: (v) => _obrigatorio(v, erro),
+        validator: (v) => hora ? _hora(v, erro) : _obrigatorio(v, erro),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(
@@ -160,26 +174,36 @@ class _TurmaFormPageState extends State<TurmaFormPage> {
                   children: [
                     _campo(
                       key: const Key('turma-nome'),
-                      label: 'Nome da turma',
-                      hint: 'ex: Turma A - Noite',
-                      controller: _nome,
-                      erro: 'o nome da turma',
-                    ),
-                    const SizedBox(height: 8),
-                    _campo(
-                      key: const Key('turma-disciplina'),
                       label: 'Disciplina',
                       hint: 'ex: Banco de Dados',
-                      controller: _disciplina,
+                      controller: _nome,
                       erro: 'a disciplina',
                     ),
                     const SizedBox(height: 8),
                     _campo(
-                      key: const Key('turma-semestre'),
-                      label: 'Semestre',
-                      hint: 'ex: 2026.2',
-                      controller: _semestre,
-                      erro: 'o semestre',
+                      key: const Key('turma-dia'),
+                      label: 'Dia da semana',
+                      hint: 'ex: Segunda-feira',
+                      controller: _dia,
+                      erro: 'o dia da semana',
+                    ),
+                    const SizedBox(height: 8),
+                    _campo(
+                      key: const Key('turma-inicio'),
+                      label: 'Início',
+                      hint: 'ex: 08:00',
+                      controller: _inicio,
+                      erro: 'o horário de início',
+                      hora: true,
+                    ),
+                    const SizedBox(height: 8),
+                    _campo(
+                      key: const Key('turma-fim'),
+                      label: 'Fim',
+                      hint: 'ex: 09:40',
+                      controller: _fim,
+                      erro: 'o horário de fim',
+                      hora: true,
                       action: TextInputAction.done,
                       onSubmit: _salvar,
                     ),
