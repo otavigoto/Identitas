@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'professor_api.dart';
 import 'screens/profile_screen.dart';
+import 'screens/gestao_disciplina_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/revisao_chamada_screen.dart';
 import 'services/nfc_service.dart';
 import 'turma.dart';
 import 'turma_detalhe_page.dart';
@@ -108,6 +111,35 @@ class _TurmasPageState extends State<TurmasPage> {
           ),
         ),
         actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Mais telas',
+            icon: const Icon(
+              Icons.dashboard_customize_outlined,
+              color: Color(0xFF1E1E1E),
+            ),
+            onSelected: (value) {
+              final page = switch (value) {
+                'inicio' => const HomeScreen(),
+                'gestao' => const GestaoDisciplinaScreen(),
+                'revisao' => const RevisaoChamadaScreen(),
+                _ => const HomeScreen(),
+              };
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => page),
+              );
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'inicio', child: Text('Início do aluno')),
+              PopupMenuItem(
+                value: 'gestao',
+                child: Text('Gestão da disciplina'),
+              ),
+              PopupMenuItem(
+                value: 'revisao',
+                child: Text('Revisão de chamada'),
+              ),
+            ],
+          ),
           IconButton(
             tooltip: 'Meu Perfil',
             icon: const Icon(

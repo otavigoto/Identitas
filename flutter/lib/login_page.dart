@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'auth_api.dart';
+import 'screens/cadastro_screen.dart';
 import 'screens/home_page.dart';
 import 'turmas_api.dart';
 import 'turmas_page.dart';
@@ -29,6 +30,9 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   bool _entrando = false;
 
+  /// Mensagem de erro do login, mostrada abaixo do formulário.
+  String? _erro;
+
   @override
   void dispose() {
     _identifier.dispose();
@@ -40,7 +44,10 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _submit() async {
     if (_entrando || !_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
-    setState(() => _entrando = true);
+    setState(() {
+      _entrando = true;
+      _erro = null;
+    });
     try {
       final usuario = await _auth.login(_identifier.text, _password.text);
       if (!mounted) return;
@@ -49,10 +56,10 @@ class _LoginPageState extends State<LoginPage> {
       );
     } on ApiException catch (e) {
       if (!mounted) return;
-      setState(() => _entrando = false);
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(e.message)));
+      setState(() {
+        _entrando = false;
+        _erro = e.message;
+      });
     }
   }
 
@@ -241,8 +248,37 @@ class _LoginPageState extends State<LoginPage> {
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: _form(),
                       ),
+                      if (_erro != null) ...[
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            _erro!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Color(0xFFB00020),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 32),
                       const Spacer(),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CadastroScreen(),
+                          ),
+                        ),
+                        child: const Text(
+                          'Criar cadastro',
+                          style: TextStyle(
+                            color: Color(0xFF1E1E1E),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       SizedBox(
                         width: 165,
                         height: 51,

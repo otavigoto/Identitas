@@ -174,6 +174,10 @@ class ApiClient {
     );
   }
 
+  /// Renova o access token com o refresh token. False se não der (sessão
+  /// vencida); usado também por serviços que fazem suas próprias requisições.
+  Future<bool> renovarSessao() => _renovar();
+
   Future<bool> _renovar() =>
       _renovando ??= _fazerRenovacao().whenComplete(() => _renovando = null);
 

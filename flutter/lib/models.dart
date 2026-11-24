@@ -29,6 +29,9 @@ class Usuario {
   final String? nfcUid;
 
   bool get ehProfessor => role == 'PROFESSOR';
+
+  /// Mesmo que [ehProfessor]; nome usado pelas telas de `screens/`.
+  bool get isProfessor => ehProfessor;
 }
 
 /// Frequência de um aluno (em uma disciplina ou geral).
