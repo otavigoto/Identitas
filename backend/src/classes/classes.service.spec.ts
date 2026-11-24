@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { Model } from 'mongoose';
 import { Role } from '../common/enums/role.enum.js';
 import { UserDocument } from '../users/entities/user.entity.js';
@@ -243,18 +243,82 @@ describe('ClassesService attendance APIs', () => {
     const malformedId = '507f1f77bcf86cd79943901';
     const exec = vi.fn().mockResolvedValue({ _id: classId });
     const classModel = {
+      findById: vi.fn(() => ({
+        exec: vi.fn().mockResolvedValue({ id_professor: teacherId }),
+      })),
       findByIdAndUpdate: vi.fn(() => ({ exec })),
     };
     const service = createService(classModel, {});
 
     await expect(
-      service.removeStudent(classId, [malformedId]),
+      service.removeStudent(classId, [malformedId], teacherId),
     ).resolves.toBeDefined();
     expect(classModel.findByIdAndUpdate).toHaveBeenCalledWith(
       classId,
       { $pull: { enrolledStudents: { $in: [malformedId] } } },
       expect.anything(),
     );
+  });
+
+  describe('turma só pode ser alterada pelo professor dono', () => {
+    const otherTeacherId = '507f1f77bcf86cd799439099';
+
+    function serviceWithClassOwnedBy(ownerId: string) {
+      const classModel = {
+        findById: vi.fn(() => ({
+          exec: vi.fn().mockResolvedValue({ id_professor: ownerId }),
+        })),
+        findByIdAndUpdate: vi.fn(() => ({
+          exec: vi.fn().mockResolvedValue({ _id: classId }),
+        })),
+        findByIdAndDelete: vi.fn(() => ({
+          exec: vi.fn().mockResolvedValue({ _id: classId }),
+        })),
+        find: vi.fn(() => ({
+          sort: vi.fn().mockReturnThis(),
+          exec: vi.fn().mockResolvedValue([]),
+        })),
+      };
+      return { classModel, service: createService(classModel, {}) };
+    }
+
+    it.each([
+      ['update', (s: ClassesService, t: string) => s.update(classId, { name: 'X' }, t)],
+      ['remove', (s: ClassesService, t: string) => s.remove(classId, t)],
+      ['addStudent', (s: ClassesService, t: string) => s.addStudent(classId, [firstStudentId], t)],
+      ['removeStudent', (s: ClassesService, t: string) => s.removeStudent(classId, [firstStudentId], t)],
+      ['findOwned', (s: ClassesService, t: string) => s.findOwned(classId, t)],
+    ])('%s: outro professor recebe 404 e nada é alterado', async (_name, run) => {
+      const { classModel, service } = serviceWithClassOwnedBy(teacherId);
+
+      await expect(run(service, otherTeacherId)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(classModel.findByIdAndUpdate).not.toHaveBeenCalled();
+      expect(classModel.findByIdAndDelete).not.toHaveBeenCalled();
+    });
+
+    it('o dono consegue alterar e excluir a própria turma', async () => {
+      const { classModel, service } = serviceWithClassOwnedBy(teacherId);
+
+      await expect(
+        service.update(classId, { name: 'Novo' }, teacherId),
+      ).resolves.toBeDefined();
+      await expect(service.remove(classId, teacherId)).resolves.toBeDefined();
+      expect(classModel.findByIdAndUpdate).toHaveBeenCalledTimes(1);
+      expect(classModel.findByIdAndDelete).toHaveBeenCalledTimes(1);
+    });
+
+    it('findAll lista só as turmas do professor logado', async () => {
+      const { classModel, service } = serviceWithClassOwnedBy(teacherId);
+
+      await service.findAll(teacherId, 'Segunda-feira');
+
+      expect(classModel.find).toHaveBeenCalledWith({
+        id_professor: teacherId,
+        week: 'Segunda-feira',
+      });
+    });
   });
 
   it('requires the full attendance submission to include every enrolled student', async () => {
