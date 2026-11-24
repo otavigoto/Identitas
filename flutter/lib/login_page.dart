@@ -1,10 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'turmas_page.dart';
+import 'services/auth_service.dart';
+import 'screens/home_screen.dart';
+import 'services/attendance_service.dart';
+import 'screens/cadastro_screen.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({
+    super.key,
+    this.authService,
+    this.attendanceService,
+  });
+
+  final AuthService? authService;
+  final AttendanceService? attendanceService;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -16,6 +26,10 @@ class _LoginPageState extends State<LoginPage> {
   final _password = TextEditingController();
   final _passwordFocus = FocusNode();
   bool _obscurePassword = true;
+  bool _carregando = false;
+  String? _erro;
+  late final AuthService _auth =
+      widget.authService ?? AuthService();
 
   @override
   void dispose() {
@@ -25,13 +39,40 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
-    // TODO backend: autenticar antes de navegar.
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const TurmasPage()));
+    setState(() {
+      _carregando = true;
+      _erro = null;
+    });
+    try {
+      final session = await _auth.login(
+        ra: _identifier.text,
+        password: _password.text,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(
+            nome: session.user.name,
+            user: session.user,
+            attendanceService: widget.attendanceService,
+          ),
+        ),
+      );
+    } on AuthException catch (error) {
+      if (!mounted) return;
+      setState(() => _erro = error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _erro =
+            'Não foi possível conectar ao servidor. Verifique a API.',
+      );
+    } finally {
+      if (mounted) setState(() => _carregando = false);
+    }
   }
 
   InputDecoration _decoration(String hint, {Widget? suffix}) => InputDecoration(
@@ -219,13 +260,42 @@ class _LoginPageState extends State<LoginPage> {
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: _form(),
                       ),
+                      if (_erro != null) ...[
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            _erro!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Color(0xFFB00020),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 32),
                       const Spacer(),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CadastroScreen(),
+                          ),
+                        ),
+                        child: const Text(
+                          'Criar cadastro',
+                          style: TextStyle(
+                            color: Color(0xFF1E1E1E),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       SizedBox(
                         width: 165,
                         height: 51,
                         child: FilledButton(
-                          onPressed: _submit,
+                          onPressed: _carregando ? null : _submit,
                           style: FilledButton.styleFrom(
                             backgroundColor: const Color(0xFF1E1E1E),
                             foregroundColor: Colors.white,
@@ -237,7 +307,15 @@ class _LoginPageState extends State<LoginPage> {
                                   letterSpacing: -1.4,
                                 ),
                           ),
-                          child: const Text('Entrar'),
+                          child: _carregando
+                              ? const SizedBox.square(
+                                  dimension: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Entrar'),
                         ),
                       ),
                       const SizedBox(height: 30),

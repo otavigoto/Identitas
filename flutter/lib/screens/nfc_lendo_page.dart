@@ -62,39 +62,19 @@ class _NfcLendoPageState extends State<NfcLendoPage> {
   @override
   Widget build(BuildContext context) {
     return NfcScaffold(
-      cardChild: const Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox.square(
-            dimension: 76,
-            child: CircularProgressIndicator(
-              strokeWidth: 5,
-              strokeCap: StrokeCap.round,
-              color: Color(0xFF1E1E1E),
-              backgroundColor: Color(0xFFD4D3BE),
-              semanticsLabel: 'Lendo cartão NFC',
-            ),
+      cardChild: const NfcStatusCard(
+        title: 'Lendo cartão',
+        subtitle: 'Não afaste o celular do leitor.',
+        icon: SizedBox.square(
+          dimension: 72,
+          child: CircularProgressIndicator(
+            strokeWidth: 6,
+            strokeCap: StrokeCap.round,
+            color: Color(0xFF1E1E1E),
+            backgroundColor: Color(0x331E1E1E),
+            semanticsLabel: 'Lendo cartão NFC',
           ),
-          SizedBox(height: 28),
-          Text(
-            'Lendo...',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFF1E1E1E),
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 12),
-          Text(
-            'Não afaste o celular do leitor',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFF5C5B4D),
-              fontSize: 13,
-            ),
-          ),
-        ],
+        ),
       ),
       bottomButton: TextButton(
         key: const Key('nfc-cancelar'),

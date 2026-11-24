@@ -111,70 +111,33 @@ class _NfcInstrucaoPageState extends State<NfcInstrucaoPage> {
   @override
   Widget build(BuildContext context) {
     return NfcScaffold(
-      cardChild: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SvgPicture.asset(
-                'assets/icons/nfc_phone.svg',
-                width: 44,
-                height: 68,
-                colorFilter: const ColorFilter.mode(
-                  Color(0xFF1E1E1E),
-                  BlendMode.srcIn,
-                ),
-                semanticsLabel: 'Celular',
+      cardChild: NfcStatusCard(
+        title: 'Aproxime o celular',
+        subtitle: 'Mantenha a parte traseira próxima ao leitor.',
+        icon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SvgPicture.asset(
+              'assets/icons/nfc_phone.svg',
+              width: 44,
+              height: 44,
+              colorFilter: const ColorFilter.mode(
+                Color(0xFF1E1E1E),
+                BlendMode.srcIn,
               ),
-              const SizedBox(width: 24),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SvgPicture.asset(
-                    'assets/icons/nfc_waves.svg',
-                    width: 48,
-                    height: 36,
-                    colorFilter: const ColorFilter.mode(
-                      Color(0xFF1E1E1E),
-                      BlendMode.srcIn,
-                    ),
-                    semanticsLabel: 'Leitor NFC',
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Leitor NFC',
-                    style: TextStyle(
-                      color: Color(0xFF1E1E1E),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+            ),
+            const SizedBox(width: 12),
+            SvgPicture.asset(
+              'assets/icons/nfc_waves.svg',
+              width: 44,
+              height: 44,
+              colorFilter: const ColorFilter.mode(
+                Color(0xFF1E1E1E),
+                BlendMode.srcIn,
               ),
-            ],
-          ),
-          const SizedBox(height: 28),
-          const Text(
-            'Aproxime seu celular do\nleitor NFC',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFF1E1E1E),
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              height: 1.25,
             ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Mantenha o celular próximo até concluir',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFF5C5B4D),
-              fontSize: 13,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
       bottomButton: TextButton(
         key: const Key('nfc-cancelar'),

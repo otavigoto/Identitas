@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../login_page.dart';
+import '../services/auth_service.dart';
+import 'carteirinha_screen.dart';
+import 'historico_screen.dart';
 import 'user_profile_card.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -42,8 +45,50 @@ class ProfileScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 height: 56,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CarteirinhaScreen(),
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text('Abrir carteirinha digital'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const HistoricoScreen(),
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text('Abrir histórico'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    await AuthService().logout();
+                    if (!context.mounted) return;
                     // Limpa toda a pilha de navegação e volta para a tela de Login
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(builder: (_) => const LoginPage()),

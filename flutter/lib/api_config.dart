@@ -9,10 +9,7 @@ class ApiConfig {
 
   static const _url = String.fromEnvironment('API_URL');
 
-  /// `_id` do professor logado. TODO: vir do JWT quando o login existir.
   static const professorId = String.fromEnvironment('PROFESSOR_ID');
-
-  /// TODO: preenchido com o token JWT após o login; enviado como Bearer.
   static String? token;
 
   static String get baseUrl {

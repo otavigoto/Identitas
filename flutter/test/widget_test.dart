@@ -1,6 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:identitas/main.dart';
+import 'package:identitas/login_page.dart';
+import 'package:identitas/services/auth_service.dart';
+import 'package:identitas/services/attendance_service.dart';
+
+class FakeAuthService extends AuthService {
+  FakeAuthService();
+
+  @override
+  Future<({AuthUser user, String accessToken, String refreshToken})> login({
+    required String ra,
+    required String password,
+  }) async {
+    return (
+      user: AuthUser(
+        id: '1',
+        name: ra == '24012345' ? 'Pilar Brandão' : 'Odete Roitmann',
+        ra: ra,
+        role: 'STUDENT',
+        course: 'Sistemas de Informação',
+        periodSemester: '6',
+      ),
+      accessToken: 'access',
+      refreshToken: 'refresh',
+    );
+  }
+}
+
+class FakeAttendanceService extends AttendanceService {
+  @override
+  Future<List<AulaIdentitas>> listForStudent(String studentId) async => const [];
+
+  @override
+  Future<List<AulaIdentitas>> listForTeacher(String teacherId) async => const [];
+}
 
 void main() {
   Future<void> openLogin(
@@ -13,14 +46,20 @@ void main() {
     tester.view.viewInsets = FakeViewPadding(bottom: keyboard);
     tester.view.padding = const FakeViewPadding(top: 62, bottom: 34);
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginPage(
+          authService: FakeAuthService(),
+          attendanceService: FakeAttendanceService(),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
   }
 
   final identifier = find.byKey(const Key('login-identifier'));
   final password = find.byKey(const Key('login-password'));
-  // Título da lista de aulas, exibida após o login.
-  const message = 'Minhas aulas';
+  const message = 'Identitas';
 
   testWidgets('Exibe a tela e exige os dois campos', (tester) async {
     await openLogin(tester);

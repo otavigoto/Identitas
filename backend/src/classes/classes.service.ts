@@ -325,27 +325,23 @@ export class ClassesService {
     );
 
     // Cenário A: Já existe chamada hoje -> apenas marca present: true nos novos alunos
+    // A chamada recebe a lista completa de presentes; ausentes são definidos explicitamente.
     if (existingRecord) {
-      if (attendanceStudentDto.presentStudentIds.length === 0) {
-        return foundClass;
-      }
+      const presentSet = new Set(attendanceStudentDto.presentStudentIds);
+      const studentsAttendance = foundClass.enrolledStudents.map((studentId) => ({
+        studentId,
+        present: presentSet.has(studentId),
+      }));
 
       const updatedClass = await this.classModel
         .findOneAndUpdate(
           { _id: id, 'attendanceList.date': existingRecord.date },
           {
             $set: {
-              'attendanceList.$.students.$[elem].present': true,
+              'attendanceList.$.students': studentsAttendance,
             },
           },
           {
-            arrayFilters: [
-              {
-                'elem.studentId': {
-                  $in: attendanceStudentDto.presentStudentIds,
-                },
-              },
-            ],
             new: true,
             runValidators: true,
           },
@@ -409,10 +405,63 @@ export class ClassesService {
       studentIds = students.map((student) => student._id.toString());
     }
 
-    // Executa exatamente a mesma lógica e retorna exatamente o mesmo ClassDocument
-    return this.markAttendance(classId, {
-      presentStudentIds: studentIds,
-      date: dto.date,
-    });
+    const foundClass = await this.classModel.findById(classId).exec();
+    if (!foundClass) {
+      throw new NotFoundException('Turma não encontrada.');
+    }
+    if (foundClass.attendanceStatus === AttendanceStatus.CLOSED) {
+      throw new BadRequestException(
+        'A lista de presença desta turma está fechada.',
+      );
+    }
+
+    const targetDate = dto.date ?? new Date();
+    const targetDayString = targetDate.toISOString().slice(0, 10);
+    const existingRecord = foundClass.attendanceList.find(
+      (item) =>
+        new Date(item.date).toISOString().slice(0, 10) === targetDayString,
+    );
+
+    if (existingRecord) {
+      const updatedClass = await this.classModel
+        .findOneAndUpdate(
+          { _id: classId, 'attendanceList.date': existingRecord.date },
+          {
+            $set: {
+              'attendanceList.$.students.$[elem].present': true,
+            },
+          },
+          {
+            arrayFilters: [
+              { 'elem.studentId': { $in: studentIds } },
+            ],
+            new: true,
+            runValidators: true,
+          },
+        )
+        .exec();
+      return updatedClass!;
+    }
+
+    const presentSet = new Set(studentIds);
+    const studentsAttendance = foundClass.enrolledStudents.map((studentId) => ({
+      studentId,
+      present: presentSet.has(studentId),
+    }));
+
+    return this.classModel
+      .findByIdAndUpdate(
+        classId,
+        {
+          $push: {
+            attendanceList: {
+              date: targetDate,
+              students: studentsAttendance,
+            },
+          },
+        },
+        { new: true, runValidators: true },
+      )
+      .exec() as Promise<ClassDocument>;
   }
 }

@@ -126,7 +126,16 @@ void main() {
     tester.view.physicalSize = size;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      MaterialApp(home: TurmasPage(nfcService: nfcService)),
+      MaterialApp(
+        home: TurmasPage(
+          nfcService: nfcService,
+          api: TurmasApi(
+            client: MockClient(backend.handle),
+            baseUrl: 'http://api.teste',
+            professorId: 'prof1',
+          ),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
   }
@@ -266,7 +275,7 @@ void main() {
     await tester.tap(find.byKey(const Key('validar-presenca')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Aproxime seu celular do\nleitor NFC'), findsOneWidget);
+    expect(find.text('Aproxime o celular'), findsOneWidget);
     await tester.tap(find.byKey(const Key('nfc-cancelar')));
     await tester.pumpAndSettle();
 
