@@ -206,9 +206,14 @@ class ListaChamada {
     required this.present,
     required this.absent,
     required this.alunos,
+    this.ausentes = const [],
   });
 
   factory ListaChamada.fromJson(Map<String, dynamic> json) => ListaChamada(
+    ausentes: [
+      for (final m in (json['missingStudents'] as List<dynamic>? ?? const []))
+        (m as Map<String, dynamic>)['id'] as String,
+    ],
     aula: Aula.fromJson(json['class'] as Map<String, dynamic>),
     attendanceRecorded: json['attendanceRecorded'] as bool? ?? false,
     total: (json['totalStudents'] as num?)?.toInt() ?? 0,
@@ -226,4 +231,7 @@ class ListaChamada {
   final int present;
   final int absent;
   final List<AlunoChamada> alunos;
+
+  /// IDs de matriculados que não existem mais como usuário.
+  final List<String> ausentes;
 }

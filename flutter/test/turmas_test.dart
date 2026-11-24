@@ -51,6 +51,10 @@ class FakeBackend {
   late List<Map<String, dynamic>> turmas;
   int _proximoId = 10;
   bool offline = false;
+
+  /// IDs matriculados que não existem mais como usuário (vêm em
+  /// `missingStudents`).
+  final Set<String> alunosOrfaos = {};
   final List<http.Request> requisicoes = [];
 
   static Map<String, dynamic> _turma(
@@ -125,6 +129,42 @@ class FakeBackend {
       return json(turma);
     }
     final alunos = (turma['enrolledStudents'] as List).cast<String>();
+    if (req.method == 'GET' && partes.length == 3 && partes[2] == 'students') {
+      final encontrados = [
+        for (final id in alunos)
+          if (!alunosOrfaos.contains(id)) id,
+      ];
+      return json({
+        'missingStudents': [
+          for (final id in alunos)
+            if (alunosOrfaos.contains(id))
+              {'id': id, 'message': 'Aluno não encontrado.'},
+        ],
+        'class': {
+          'id': turma['_id'],
+          'name': turma['name'],
+          'id_professor': 'prof1',
+          'week': turma['week'],
+          'startTime': turma['startTime'],
+          'endTime': turma['endTime'],
+        },
+        'date': '2026-11-23T00:00:00.000Z',
+        'attendanceRecorded': false,
+        'totalStudents': encontrados.length,
+        'present': 0,
+        'absent': encontrados.length,
+        'students': [
+          for (final id in encontrados)
+            {
+              'id': id,
+              'name': 'Nome $id',
+              'ra': id,
+              'nfcUid': null,
+              'present': false,
+            },
+        ],
+      });
+    }
     if (req.method == 'POST' && partes[2] == 'students') {
       for (final id in (body['enrolledStudents'] as List).cast<String>()) {
         if (!alunos.contains(id)) alunos.add(id);
@@ -332,26 +372,68 @@ void main() {
     expect(find.text('Detalhe da aula'), findsOneWidget);
   });
 
-  testWidgets('Adiciona e remove alunos', (tester) async {
+  testWidgets('Lista alunos com nome e RA, remove um e não oferece adicionar', (
+    tester,
+  ) async {
+    await abrirLista(tester);
+    await tester.tap(find.text('Projeto Integrador VI'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alunos (2)'), findsOneWidget);
+    expect(find.text('Nome 24012345'), findsOneWidget);
+    expect(find.text('RA 24012345'), findsOneWidget);
+    expect(find.text('Aluno 24012345'), findsNothing);
+    expect(find.byKey(const Key('adicionar-aluno')), findsNothing);
+    expect(find.text('Adicionar'), findsNothing);
+
+    await tester.tap(find.byTooltip('Remover Nome 24012345'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alunos (1)'), findsOneWidget);
+    expect(find.text('Nome 24012345'), findsNothing);
+    expect(backend.turmas[0]['enrolledStudents'], ['24012346']);
+  });
+
+  testWidgets('Turma sem alunos mostra o estado vazio', (tester) async {
     await abrirLista(tester);
     await tester.tap(find.text('Banco de Dados'));
     await tester.pumpAndSettle();
     expect(find.text('Alunos (0)'), findsOneWidget);
     expect(find.text('Nenhum aluno matriculado.'), findsOneWidget);
+  });
 
-    await tester.tap(find.byKey(const Key('adicionar-aluno')));
+  testWidgets('Remove sozinho o aluno que não existe mais e avisa', (
+    tester,
+  ) async {
+    backend.alunosOrfaos.add('24012345');
+    await abrirLista(tester);
+    await tester.tap(find.text('Projeto Integrador VI'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('aluno-id')), '24099999');
-    await tester.tap(find.byKey(const Key('confirmar-aluno')));
-    await tester.pumpAndSettle();
+
+    expect(find.text('1 aluno removido, não encontrado.'), findsOneWidget);
     expect(find.text('Alunos (1)'), findsOneWidget);
-    expect(find.text('Aluno 24099999'), findsOneWidget);
-    expect(backend.turmas[1]['enrolledStudents'], ['24099999']);
+    expect(find.textContaining('24012345'), findsNothing);
+    expect(find.text('Nome 24012346'), findsOneWidget);
+    expect(find.text('RA 24012346'), findsOneWidget);
+    expect(backend.turmas[0]['enrolledStudents'], ['24012346']);
+  });
 
-    await tester.tap(find.byTooltip('Remover 24099999'));
+  testWidgets('Remove vários ausentes e conta no aviso', (tester) async {
+    backend.alunosOrfaos.addAll(['24012345', '24012346']);
+    await abrirLista(tester);
+    await tester.tap(find.text('Projeto Integrador VI'));
     await tester.pumpAndSettle();
+
+    expect(find.text('2 alunos removidos, não encontrados.'), findsOneWidget);
     expect(find.text('Alunos (0)'), findsOneWidget);
-    expect(backend.turmas[1]['enrolledStudents'], isEmpty);
+    expect(find.text('Nenhum aluno matriculado.'), findsOneWidget);
+    expect(backend.turmas[0]['enrolledStudents'], isEmpty);
+  });
+
+  testWidgets('Sem alunos ausentes não mostra aviso', (tester) async {
+    await abrirLista(tester);
+    await tester.tap(find.text('Projeto Integrador VI'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('aviso-alunos')), findsNothing);
+    expect(find.text('Alunos (2)'), findsOneWidget);
   });
 
   testWidgets('Exclui uma aula após confirmar', (tester) async {

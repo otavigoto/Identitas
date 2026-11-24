@@ -158,6 +158,105 @@ describe('ClassesService attendance APIs', () => {
     });
   });
 
+  it('lists enrolled students that no longer exist instead of failing the roster', async () => {
+    const cls = {
+      _id: { toString: () => classId },
+      name: 'Banco de Dados',
+      id_professor: teacherId,
+      enrolledStudents: [firstStudentId, secondStudentId],
+      week: 'Segunda-feira',
+      startTime: '08:00',
+      endTime: '10:00',
+      attendanceStatus: AttendanceStatus.CLOSED,
+      attendanceList: [],
+    } as unknown as ClassDocument;
+    const classModel = {
+      findById: vi.fn(() => ({ exec: vi.fn().mockResolvedValue(cls) })),
+    };
+    const userModel = {
+      find: vi.fn(() => ({
+        select: vi.fn().mockReturnThis(),
+        sort: vi.fn().mockReturnThis(),
+        exec: vi.fn().mockResolvedValue([
+          {
+            _id: { toString: () => firstStudentId },
+            name: 'Ana',
+            ra: 'RA001',
+            nfcUid: 'AA01',
+          },
+        ]),
+      })),
+    };
+    const service = createService(classModel, userModel);
+
+    await expect(
+      service.getAttendanceList(classId, teacherId),
+    ).resolves.toMatchObject({
+      totalStudents: 1,
+      students: [{ id: firstStudentId, name: 'Ana' }],
+      missingStudents: [
+        { id: secondStudentId, message: 'Aluno não encontrado.' },
+      ],
+    });
+  });
+
+  it('treats malformed enrolled IDs as missing students and still lists the others', async () => {
+    const malformedId = '507f1f77bcf86cd79943901';
+    const cls = {
+      _id: { toString: () => classId },
+      name: 'Banco de Dados',
+      id_professor: teacherId,
+      enrolledStudents: [firstStudentId, malformedId],
+      week: 'Segunda-feira',
+      startTime: '08:00',
+      endTime: '10:00',
+      attendanceStatus: AttendanceStatus.CLOSED,
+      attendanceList: [],
+    } as unknown as ClassDocument;
+    const classModel = {
+      findById: vi.fn(() => ({ exec: vi.fn().mockResolvedValue(cls) })),
+    };
+    const find = vi.fn(() => ({
+      select: vi.fn().mockReturnThis(),
+      sort: vi.fn().mockReturnThis(),
+      exec: vi.fn().mockResolvedValue([
+        {
+          _id: { toString: () => firstStudentId },
+          name: 'Ana',
+          ra: 'RA001',
+          nfcUid: 'AA01',
+        },
+      ]),
+    }));
+    const service = createService(classModel, { find });
+
+    await expect(
+      service.getAttendanceList(classId, teacherId),
+    ).resolves.toMatchObject({
+      students: [{ id: firstStudentId, name: 'Ana' }],
+      missingStudents: [{ id: malformedId, message: 'Aluno não encontrado.' }],
+    });
+    expect(find).toHaveBeenCalledWith({ _id: { $in: [firstStudentId] } });
+  });
+
+  it('removes a student even when the stored ID is malformed', async () => {
+    const malformedId = '507f1f77bcf86cd79943901';
+    const exec = vi.fn().mockResolvedValue({ _id: classId });
+    const classModel = {
+      findByIdAndUpdate: vi.fn(() => ({ exec })),
+    };
+    const service = createService(classModel, {});
+
+    await expect(
+      service.removeStudent(classId, [malformedId]),
+    ).resolves.toBeDefined();
+    expect(classModel.findByIdAndUpdate).toHaveBeenCalledWith(
+      classId,
+      { $pull: { enrolledStudents: { $in: [malformedId] } } },
+      expect.anything(),
+    );
+  });
+
   it('requires the full attendance submission to include every enrolled student', async () => {
     const cls = {
       _id: classId,

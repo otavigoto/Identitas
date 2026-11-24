@@ -151,6 +151,22 @@ IDs enviados como `studentId` são IDs MongoDB, não RA nem NFC UID. O endpoint 
 chamada completa valida que todos os alunos matriculados estejam presentes no
 body e que nenhum aluno de outra turma seja enviado.
 
+Se algum ID de `enrolledStudents` não existir mais como usuário, as rotas
+`GET /classes/:id/students`, `GET /classes/:id/students/all` e
+`GET /classes/:id/attendance/summary` **não falham**: elas devolvem os alunos
+encontrados em `students` e os ausentes em `missingStudents`:
+
+```json
+{
+  "students": [{ "id": "...", "name": "Ana", "ra": "RA001", "present": false }],
+  "missingStudents": [{ "id": "<id-mongodb>", "message": "Aluno não encontrado." }]
+}
+```
+
+Os alunos em `missingStudents` não entram em `totalStudents`, e o envio da
+chamada completa exige todos os matriculados: remova-os da turma antes
+(`DELETE /classes/:id/students/:studentId`).
+
 ## Respostas de erro comuns
 
 - `400 Bad Request`: body inválido, ID inválido, aluno não matriculado, chamada
