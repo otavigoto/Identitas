@@ -1,15 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api_client.dart';
 import '../models.dart';
 import '../professor_api.dart';
+import '../turma.dart';
+import '../turma_detalhe_page.dart';
 import '../turmas_page.dart';
+import '../turmas_api.dart';
 import 'profile_screen.dart';
 
 class ProfessorHomePage extends StatefulWidget {
-  const ProfessorHomePage({super.key, this.api});
+  const ProfessorHomePage({super.key, this.api, this.turmasApi});
 
   final ProfessorApi? api;
+  final TurmasApi? turmasApi;
 
   @override
   State<ProfessorHomePage> createState() => _ProfessorHomePageState();
@@ -19,6 +25,7 @@ class _ProfessorHomePageState extends State<ProfessorHomePage> {
   static const _ink = Color(0xFF1E1E1E);
   static const _accent = Color(0xFFF9FF2E);
   late final ProfessorApi _api = widget.api ?? ProfessorApi();
+  late final TurmasApi _turmasApi = widget.turmasApi ?? TurmasApi();
 
   AulasDoDia? _hoje;
   String? _erro;
@@ -45,18 +52,55 @@ class _ProfessorHomePageState extends State<ProfessorHomePage> {
     }
   }
 
+  Aula? get _proximaAula {
+    final agora = TimeOfDay.now();
+    final agoraEmMinutos = agora.hour * 60 + agora.minute;
+    for (final aula in _hoje?.aulas ?? const <Aula>[]) {
+      if ((aula.fimEmMinutos ?? 0) >= agoraEmMinutos) return aula;
+    }
+    return null;
+  }
+
   void _abrirPerfil() => Navigator.of(
     context,
   ).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
 
   void _abrirDisciplinas() => Navigator.of(
     context,
-  ).push(MaterialPageRoute(builder: (_) => const TurmasPage()));
+  ).push(
+    MaterialPageRoute(
+      builder: (_) => TurmasPage(
+        periodSemester: _hoje?.usuario.periodSemester,
+      ),
+    ),
+  );
+
+  void _abrirGestao(Aula aula) {
+    final turma = Turma(
+      id: aula.id,
+      name: aula.name,
+      idProfessor: aula.idProfessor,
+      week: aula.week,
+      startTime: aula.startTime,
+      endTime: aula.endTime,
+    );
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TurmaDetalhePage(
+          api: _turmasApi,
+          professorApi: _api,
+          turma: turma,
+          onChanged: (_) => unawaited(_carregar()),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final nome = _hoje?.usuario.name ?? ApiClient.instance.session.name ?? '';
     final aulas = _hoje?.aulas ?? const <Aula>[];
+    final proximaAula = _proximaAula;
 
     return Scaffold(
       backgroundColor: _ink,
@@ -111,12 +155,38 @@ class _ProfessorHomePageState extends State<ProfessorHomePage> {
                   letterSpacing: -1.2,
                 ),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 12),
+              const Text(
+                'Próxima Aula',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (_carregando)
+                const SizedBox(
+                  height: 160,
+                  child: Center(
+                    child: CircularProgressIndicator(color: _accent),
+                  ),
+                )
+              else if (_erro != null)
+                _ErroHome(mensagem: _erro!, onTentar: _carregar)
+              else
+                _ProximaAulaCard(
+                  aula: proximaAula,
+                  onTap: proximaAula == null
+                      ? null
+                      : () => _abrirGestao(proximaAula),
+                ),
+              const SizedBox(height: 24),
               Row(
                 children: [
                   const Expanded(
                     child: Text(
-                      'Aulas de hoje',
+                      'Resumo de Hoje',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 20,
@@ -141,16 +211,7 @@ class _ProfessorHomePageState extends State<ProfessorHomePage> {
                 ],
               ),
               const SizedBox(height: 12),
-              if (_carregando)
-                const Padding(
-                  padding: EdgeInsets.all(28),
-                  child: Center(
-                    child: CircularProgressIndicator(color: _accent),
-                  ),
-                )
-              else if (_erro != null)
-                _ErroHome(mensagem: _erro!, onTentar: _carregar)
-              else if (aulas.isEmpty)
+              if (!_carregando && _erro == null && aulas.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 20),
                   child: Text(
@@ -158,26 +219,14 @@ class _ProfessorHomePageState extends State<ProfessorHomePage> {
                     style: TextStyle(color: Colors.white70),
                   ),
                 )
-              else
+              else if (!_carregando && _erro == null)
                 for (final aula in aulas) ...[
-                  _AulaCard(aula: aula),
+                  _AulaCard(
+                    aula: aula,
+                    onTap: () => _abrirGestao(aula),
+                  ),
                   const SizedBox(height: 12),
                 ],
-              const SizedBox(height: 16),
-              FilledButton(
-                key: const Key('professor-ver-todas'),
-                onPressed: _abrirDisciplinas,
-                style: FilledButton.styleFrom(
-                  backgroundColor: _accent,
-                  foregroundColor: _ink,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: const StadiumBorder(),
-                ),
-                child: const Text(
-                  'Ver todas as disciplinas',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
             ],
           ),
         ),
@@ -187,48 +236,133 @@ class _ProfessorHomePageState extends State<ProfessorHomePage> {
 }
 
 class _AulaCard extends StatelessWidget {
-  const _AulaCard({required this.aula});
+  const _AulaCard({required this.aula, required this.onTap});
 
   final Aula aula;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFEFFD9),
-      borderRadius: BorderRadius.circular(24),
-    ),
-    child: Row(
-      children: [
-        Container(
-          width: 4,
-          height: 48,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E),
-            borderRadius: BorderRadius.circular(4),
-          ),
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    borderRadius: BorderRadius.circular(22),
+    child: InkWell(
+      key: Key('professor-disciplina-${aula.id}'),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEFFD9),
+          borderRadius: BorderRadius.circular(22),
         ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                aula.name,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text('${aula.week} · ${aula.horario}'),
-            ],
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              aula.horario,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              aula.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.schedule, size: 12),
+                const SizedBox(width: 4),
+                Text(aula.week, style: const TextStyle(fontSize: 10)),
+              ],
+            ),
+          ],
         ),
-        const Icon(Icons.chevron_right),
-      ],
+      ),
     ),
   );
+}
+
+class _ProximaAulaCard extends StatelessWidget {
+  const _ProximaAulaCard({required this.aula, required this.onTap});
+
+  final Aula? aula;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final aula = this.aula;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        key: aula == null ? null : Key('professor-proxima-${aula.id}'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          height: 168,
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FF2E),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: aula == null
+              ? const Center(
+                  child: Text(
+                    'Nenhuma aula pendente hoje.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'HOJE · ${aula.horario}',
+                        style: const TextStyle(
+                          color: Color(0xFFF9FF2E),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: Text(
+                        aula.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          height: 1,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.8,
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        const Icon(Icons.schedule, size: 13),
+                        const SizedBox(width: 4),
+                        Text(aula.week, style: const TextStyle(fontSize: 10)),
+                      ],
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ErroHome extends StatelessWidget {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../auth_api.dart';
@@ -24,6 +26,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _erro;
   bool _carregando = true;
   bool _vinculandoNfc = false;
+
+  @override
+  void dispose() {
+    unawaited(_nfc.parar());
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -94,13 +102,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Meu Perfil',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  if (Navigator.of(context).canPop())
+                    IconButton(
+                      key: const Key('perfil-voltar'),
+                      tooltip: 'Voltar',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    ),
+                  const Text(
+                    'Meu Perfil',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               if (_carregando)
@@ -293,12 +312,16 @@ class _DigitalProfileCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _ProfileField(label: 'RA', value: user.ra),
                 _ProfileField(
-                  label: 'Curso',
+                  label: user.ehProfessor ? 'RP (Registro do Professor)' : 'RA',
+                  value: user.ra,
+                ),
+                _ProfileField(
+                  label: user.ehProfessor ? 'Escola' : 'Curso',
                   value: user.course.isEmpty ? 'Não informado' : user.course,
                 ),
-                _ProfileField(label: 'Período', value: formattedPeriod),
+                if (!user.ehProfessor)
+                  _ProfileField(label: 'Período', value: formattedPeriod),
               ],
             ),
           ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'auth_api.dart';
-import 'screens/cadastro_screen.dart';
 import 'screens/home_page.dart';
 import 'screens/professor_home_page.dart';
 import 'professor_api.dart';
@@ -10,16 +9,21 @@ import 'turmas_api.dart';
 
 /// Tela inicial de cada perfil: aluno vê a home com as aulas do dia e
 /// professor vê sua home com as aulas do dia.
-Widget telaInicialPara(String? role, {ProfessorApi? professorApi}) =>
+Widget telaInicialPara(
+  String? role, {
+  ProfessorApi? professorApi,
+  TurmasApi? turmasApi,
+}) =>
     role == 'PROFESSOR'
-    ? ProfessorHomePage(api: professorApi)
+    ? ProfessorHomePage(api: professorApi, turmasApi: turmasApi)
     : const HomePage();
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key, this.auth, this.professorApi});
+  const LoginPage({super.key, this.auth, this.professorApi, this.turmasApi});
 
   final AuthApi? auth;
   final ProfessorApi? professorApi;
+  final TurmasApi? turmasApi;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -60,6 +64,7 @@ class _LoginPageState extends State<LoginPage> {
           builder: (_) => telaInicialPara(
             usuario.role,
             professorApi: widget.professorApi,
+            turmasApi: widget.turmasApi,
           ),
         ),
       );
@@ -273,20 +278,6 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                       const SizedBox(height: 32),
                       const Spacer(),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const CadastroScreen(),
-                          ),
-                        ),
-                        child: const Text(
-                          'Criar cadastro',
-                          style: TextStyle(
-                            color: Color(0xFF1E1E1E),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
                       const SizedBox(height: 8),
                       SizedBox(
                         width: 165,

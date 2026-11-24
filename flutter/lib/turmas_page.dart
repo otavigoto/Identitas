@@ -4,16 +4,21 @@ import 'professor_api.dart';
 import 'services/nfc_service.dart';
 import 'turma.dart';
 import 'turma_detalhe_page.dart';
-import 'turma_form_page.dart';
 import 'turmas_api.dart';
 
-/// Lista de aulas (turmas) do professor, com busca e filtro por dia.
 class TurmasPage extends StatefulWidget {
-  const TurmasPage({super.key, this.api, this.professorApi, this.nfcService});
+  const TurmasPage({
+    super.key,
+    this.api,
+    this.professorApi,
+    this.nfcService,
+    this.periodSemester,
+  });
 
   final TurmasApi? api;
   final ProfessorApi? professorApi;
   final NfcService? nfcService;
+  final String? periodSemester;
 
   @override
   State<TurmasPage> createState() => _TurmasPageState();
@@ -21,16 +26,21 @@ class TurmasPage extends StatefulWidget {
 
 class _TurmasPageState extends State<TurmasPage> {
   late final TurmasApi _api = widget.api ?? TurmasApi();
+  late final PageController _pages = PageController(viewportFraction: 0.86);
   List<Turma> _turmas = [];
   bool _carregando = true;
   String? _erro;
-  String _busca = '';
-  String? _dia;
 
   @override
   void initState() {
     super.initState();
     _carregar();
+  }
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
   }
 
   Future<void> _carregar() async {
@@ -48,197 +58,242 @@ class _TurmasPageState extends State<TurmasPage> {
     }
   }
 
-  List<String> get _dias =>
-      (_turmas.map((t) => t.week).toSet().toList()..sort());
-
-  List<Turma> get _filtradas {
-    final q = _busca.trim().toLowerCase();
-    return _turmas.where((t) {
-      if (_dia != null && t.week != _dia) return false;
-      return q.isEmpty ||
-          t.name.toLowerCase().contains(q) ||
-          t.week.toLowerCase().contains(q);
-    }).toList();
+  int _diaIndex(String dia) {
+    final normalized = dia
+        .toLowerCase()
+        .replaceAll('ç', 'c')
+        .replaceAll('á', 'a')
+        .replaceAll('ã', 'a')
+        .replaceAll('é', 'e');
+    const days = [
+      'segunda',
+      'terca',
+      'quarta',
+      'quinta',
+      'sexta',
+      'sabado',
+      'domingo',
+    ];
+    final index = days.indexWhere(normalized.startsWith);
+    return index < 0 ? days.length : index;
   }
 
-  void _atualizar(Turma nova) => setState(() {
-    _turmas = [for (final t in _turmas) t.id == nova.id ? nova : t];
-  });
-
-  void _remover(Turma turma) => setState(() {
-    _turmas = _turmas.where((t) => t.id != turma.id).toList();
-  });
-
-  Future<void> _nova() async {
-    final criada = await Navigator.of(
-      context,
-    ).push<Turma>(MaterialPageRoute(builder: (_) => TurmaFormPage(api: _api)));
-    if (criada != null) setState(() => _turmas = [..._turmas, criada]);
+  List<String> get _dias {
+    final dias = _turmas.map((turma) => turma.week).toSet().toList()
+      ..sort((a, b) {
+        final compare = _diaIndex(a).compareTo(_diaIndex(b));
+        return compare == 0 ? a.compareTo(b) : compare;
+      });
+    return dias;
   }
 
-  void _abrir(Turma turma) => Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => TurmaDetalhePage(
-        api: _api,
-        professorApi: widget.professorApi ?? ProfessorApi(),
-        turma: turma,
-        onChanged: _atualizar,
-        onDeleted: () => _remover(turma),
-        nfcService: widget.nfcService,
+  List<Turma> _aulasDoDia(String dia) => _turmas
+      .where((turma) => turma.week == dia)
+      .toList()
+    ..sort((a, b) => a.startTime.compareTo(b.startTime));
+
+  void _atualizar(Turma nova) {
+    setState(() {
+      _turmas = [for (final turma in _turmas) turma.id == nova.id ? nova : turma];
+    });
+  }
+
+  void _abrir(Turma turma) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TurmaDetalhePage(
+          api: _api,
+          professorApi: widget.professorApi ?? ProfessorApi(),
+          turma: turma,
+          onChanged: _atualizar,
+          nfcService: widget.nfcService,
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final lista = _filtradas;
-    // Se o dia filtrado deixou de existir (ex.: turma excluída), limpa.
-    if (_dia != null && !_dias.contains(_dia)) _dia = null;
+    final dias = _dias;
+    final semestre = widget.periodSemester?.trim() ?? '';
+    final subtitulo = semestre.isEmpty
+        ? 'Horários da semana'
+        : semestre.toLowerCase().contains('semestre')
+        ? semestre
+        : '$semestreº semestre';
     return Scaffold(
+      backgroundColor: const Color(0xFF1E1E1E),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        title: const Text(
-          'Minhas disciplinas',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            letterSpacing: -1,
-            color: Color(0xFF1E1E1E),
-          ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        key: const Key('nova-aula'),
-        onPressed: _nova,
         backgroundColor: const Color(0xFF1E1E1E),
         foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Nova aula'),
-      ),
-      body: SafeArea(
-        child: Column(
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: 20,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
-              child: TextField(
-                key: const Key('busca-aula'),
-                onChanged: (v) => setState(() => _busca = v),
-                decoration: InputDecoration(
-                  hintText: 'Buscar por nome ou dia da semana',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: const Color(0xFFF2F2F2),
-                  isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
+            Text(
+              'Disciplinas Matriculadas',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
-            SizedBox(
-              height: 44,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                children: [
-                  for (final s in _dias)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        label: Text(s),
-                        selected: _dia == s,
-                        selectedColor: const Color(0xFFF9FF2E),
-                        showCheckmark: false,
-                        shape: const StadiumBorder(),
-                        onSelected: (sel) =>
-                            setState(() => _dia = sel ? s : null),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: _carregando
-                  ? const Center(child: CircularProgressIndicator())
-                  : _erro != null
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_erro!, textAlign: TextAlign.center),
-                            const SizedBox(height: 12),
-                            FilledButton(
-                              key: const Key('tentar-novamente'),
-                              onPressed: _carregar,
-                              child: const Text('Tentar novamente'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : lista.isEmpty
-                  ? const Center(child: Text('Nenhuma aula encontrada.'))
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 96),
-                      itemCount: lista.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 12),
-                      itemBuilder: (_, i) => _TurmaCard(
-                        turma: lista[i],
-                        onTap: () => _abrir(lista[i]),
-                      ),
-                    ),
+            SizedBox(height: 2),
+            Text(
+              subtitulo,
+              style: TextStyle(fontSize: 11, color: Colors.white70),
             ),
           ],
         ),
+      ),
+      body: SafeArea(
+        child: _carregando
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFFF9FF2E)),
+              )
+            : _erro != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _erro!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        key: const Key('tentar-novamente'),
+                        onPressed: _carregar,
+                        child: const Text('Tentar novamente'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : dias.isEmpty
+            ? const Center(
+                child: Text(
+                  'Nenhuma disciplina encontrada.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              )
+            : PageView.builder(
+                key: const Key('disciplinas-por-dia'),
+                controller: _pages,
+                itemCount: dias.length,
+                itemBuilder: (context, index) {
+                  final dia = dias[index];
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 48, 6, 24),
+                    child: _DiaCard(
+                      dia: dia,
+                      turmas: _aulasDoDia(dia),
+                      onTap: _abrir,
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }
 }
 
-class _TurmaCard extends StatelessWidget {
-  const _TurmaCard({required this.turma, required this.onTap});
+class _DiaCard extends StatelessWidget {
+  const _DiaCard({
+    required this.dia,
+    required this.turmas,
+    required this.onTap,
+  });
+
+  final String dia;
+  final List<Turma> turmas;
+  final ValueChanged<Turma> onTap;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF9FF2E),
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            dia.toUpperCase(),
+            style: const TextStyle(
+              color: Color(0xFFF9FF2E),
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Expanded(
+          child: ListView.separated(
+            padding: EdgeInsets.zero,
+            itemCount: turmas.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
+            itemBuilder: (_, index) => _DisciplinaCard(
+              turma: turmas[index],
+              onTap: () => onTap(turmas[index]),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DisciplinaCard extends StatelessWidget {
+  const _DisciplinaCard({required this.turma, required this.onTap});
 
   final Turma turma;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => Material(
-    color: const Color(0xFFF9FF2E),
-    borderRadius: BorderRadius.circular(30),
+    color: const Color(0xFFFEFFD9),
+    borderRadius: BorderRadius.circular(18),
     child: InkWell(
-      borderRadius: BorderRadius.circular(30),
+      key: Key('disciplina-${turma.id}'),
+      borderRadius: BorderRadius.circular(18),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    turma.name,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      height: 1.1,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -1.2,
-                      color: Color(0xFF1E1E1E),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text('${turma.week} · ${turma.horario}'),
-                  Text(
-                    '${turma.enrolledStudents.length} alunos',
-                    style: const TextStyle(color: Colors.black54),
-                  ),
-                ],
+            Text(
+              turma.horario,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const Icon(Icons.chevron_right),
+            const SizedBox(height: 3),
+            Text(
+              turma.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 5),
+            Row(
+              children: [
+                const Icon(Icons.groups_outlined, size: 12),
+                const SizedBox(width: 4),
+                Text(
+                  '${turma.enrolledStudents.length} alunos',
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ],
+            ),
           ],
         ),
       ),
