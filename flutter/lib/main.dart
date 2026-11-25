@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'auth_api.dart';
-import 'login_page.dart';
+import 'package:identitas/services/api_service.dart';
+import 'package:identitas/screens/login_page.dart';
+import 'package:identitas/styles/app_styles.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,10 +22,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     title: 'Identitas',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFF9FF2E)),
-      scaffoldBackgroundColor: Colors.white,
-    ),
+    theme: appTheme,
     home: home ?? const LoginPage(),
   );
 }

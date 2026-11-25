@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../models.dart';
-import '../professor_api.dart';
-import '../turma.dart';
-import '../turmas_api.dart' show ApiException;
-import 'screens_shared.dart';
+import 'package:identitas/services/models.dart';
+import 'package:identitas/services/api_service.dart';
+import 'package:identitas/styles/app_styles.dart';
 
 class RevisaoChamadaScreen extends StatefulWidget {
   const RevisaoChamadaScreen({

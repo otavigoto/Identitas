@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import '../aluno_api.dart';
-import '../api_client.dart';
-import '../models.dart';
-import 'disciplinas_page.dart';
-import 'nfc_instrucao_page.dart';
-import 'profile_screen.dart';
+import 'package:identitas/services/api_service.dart';
+import 'package:identitas/services/models.dart';
+import 'package:identitas/screens/disciplinas_page.dart';
+import 'package:identitas/screens/nfc_pages.dart';
+import 'package:identitas/screens/profile_screen.dart';
 
 /// Home do aluno: próxima aula e resumo do dia, vindos de
 /// `GET /classes/me/today`.

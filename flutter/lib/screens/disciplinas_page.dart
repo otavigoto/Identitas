@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../aluno_api.dart';
-import '../api_client.dart';
-import '../models.dart';
+import 'package:identitas/services/api_service.dart';
+import 'package:identitas/services/models.dart';
 
 /// Disciplinas do aluno por dia da semana, com a frequência de cada uma e a
 /// geral (`GET /classes/me/weekly`).
