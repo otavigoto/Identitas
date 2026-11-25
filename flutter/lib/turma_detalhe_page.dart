@@ -1,17 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'models.dart';
 import 'professor_api.dart';
-import 'screens/nfc_instrucao_page.dart';
-import 'widgets/nfc_scaffold.dart';
+import 'screens/revisao_chamada_screen.dart';
 import 'services/nfc_service.dart';
 import 'turma.dart';
-import 'turma_form_page.dart';
 import 'turmas_api.dart';
 
-/// Detalhe da turma: dados, alunos matriculados, editar e excluir.
-///
-/// As mudanças são repassadas à lista por [onChanged] e [onDeleted].
 class TurmaDetalhePage extends StatefulWidget {
   const TurmaDetalhePage({
     super.key,
@@ -19,7 +16,6 @@ class TurmaDetalhePage extends StatefulWidget {
     required this.professorApi,
     required this.turma,
     required this.onChanged,
-    required this.onDeleted,
     this.nfcService,
   });
 
@@ -27,7 +23,6 @@ class TurmaDetalhePage extends StatefulWidget {
   final ProfessorApi professorApi;
   final Turma turma;
   final ValueChanged<Turma> onChanged;
-  final VoidCallback onDeleted;
   final NfcService? nfcService;
 
   @override
@@ -36,271 +31,586 @@ class TurmaDetalhePage extends StatefulWidget {
 
 class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
   late Turma _turma = widget.turma;
+  late final NfcService _nfc = widget.nfcService ?? NfcService();
+  final _busca = TextEditingController();
+
+  Map<String, AlunoChamada> _alunos = {};
+  Map<String, bool> _presencas = {};
+  Map<String, Frequencia> _frequencias = {};
+  Frequencia? _frequenciaGeral;
+  bool _carregando = true;
   bool _ocupado = false;
-
-  /// Nome e RA dos matriculados, por ID (`GET /classes/:id/students`).
-  Map<String, AlunoChamada> _nomes = {};
-
-  /// Quantos matriculados que não existem mais foram tirados da turma
-  /// automaticamente ao abrir esta tela.
-  int _removidos = 0;
-
-  /// Erro ao buscar os nomes (ex.: sem conexão).
-  String? _avisoAlunos;
+  bool _chamadaAtiva = false;
+  bool _lendoNfc = false;
+  bool _scannerPausado = false;
+  String? _erro;
+  String? _avisoNfc;
 
   @override
   void initState() {
     super.initState();
-    _carregarNomes();
+    _busca.addListener(_atualizarBusca);
+    _carregar();
   }
 
-  Future<void> _carregarNomes() async {
-    if (_turma.enrolledStudents.isEmpty) {
-      if (mounted) setState(() => _nomes = {});
-      return;
-    }
+  @override
+  void dispose() {
+    _busca
+      ..removeListener(_atualizarBusca)
+      ..dispose();
+    unawaited(_nfc.parar());
+    super.dispose();
+  }
+
+  void _atualizarBusca() => setState(() {});
+
+  Future<void> _carregar() async {
+    setState(() {
+      _carregando = true;
+      _erro = null;
+    });
     try {
       final lista = await widget.professorApi.listaChamada(_turma.id);
+      final resumo = await widget.professorApi.resumoFrequencia(_turma.id);
       if (!mounted) return;
+
+      final attendance = resumo['attendance'];
+      final alunosResumo = resumo['students'] as List<dynamic>? ?? const [];
       setState(() {
-        _nomes = {for (final a in lista.alunos) a.id: a};
-        _avisoAlunos = null;
+        _alunos = {for (final aluno in lista.alunos) aluno.id: aluno};
+        _presencas = {
+          for (final aluno in lista.alunos) aluno.id: aluno.present,
+        };
+        _frequenciaGeral = attendance is Map<String, dynamic>
+            ? Frequencia.fromJson(attendance)
+            : null;
+        _frequencias = {
+          for (final item in alunosResumo)
+            if (item is Map<String, dynamic> &&
+                item['attendance'] is Map<String, dynamic>)
+              item['id'] as String: Frequencia.fromJson(
+                item['attendance'] as Map<String, dynamic>,
+              ),
+        };
+        _erro = null;
       });
-      if (lista.ausentes.isNotEmpty) await _removerAusentes(lista.ausentes);
+
+      if (lista.ausentes.isNotEmpty) {
+        var turmaAtualizada = _turma;
+        for (final id in lista.ausentes) {
+          turmaAtualizada = await widget.api.removerAluno(_turma.id, id);
+        }
+        if (!mounted) return;
+        setState(() => _turma = turmaAtualizada);
+        widget.onChanged(turmaAtualizada);
+      }
     } on ApiException catch (e) {
-      // A lista continua funcionando com os IDs, para dar para remover.
-      if (mounted) setState(() => _avisoAlunos = e.message);
+      if (mounted) setState(() => _erro = e.message);
+    } finally {
+      if (mounted) setState(() => _carregando = false);
     }
   }
 
-  /// Tira da turma os matriculados que o backend diz não existirem mais.
-  Future<void> _removerAusentes(List<String> ids) async {
-    var turma = _turma;
-    for (final id in ids) {
-      turma = await widget.api.removerAluno(turma.id, id);
-    }
-    if (!mounted) return;
-    setState(() {
-      _turma = turma;
-      _removidos = ids.length;
-    });
-    widget.onChanged(turma);
+  List<AlunoChamada> get _alunosFiltrados {
+    final termo = _busca.text.trim().toLowerCase();
+    final alunos = _alunos.values.toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    if (termo.isEmpty) return alunos;
+    return alunos
+        .where(
+          (aluno) =>
+              aluno.name.toLowerCase().contains(termo) ||
+              aluno.ra.toLowerCase().contains(termo),
+        )
+        .toList();
   }
 
-  void _atualizar(Turma nova) {
-    final mudouAlunos =
-        nova.enrolledStudents.join(',') != _turma.enrolledStudents.join(',');
-    setState(() {
-      _turma = nova;
-      if (mudouAlunos) _removidos = 0;
-    });
-    widget.onChanged(nova);
-    if (mudouAlunos) _carregarNomes();
-  }
-
-  void _erro(Object e) {
+  void _mostrarErro(String mensagem) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(e is ApiException ? e.message : '$e')),
-      );
+      ..showSnackBar(SnackBar(content: Text(mensagem)));
   }
 
-  /// Executa uma chamada à API evitando cliques repetidos.
-  Future<void> _executar(Future<void> Function() acao) async {
-    if (_ocupado) return;
+  Future<void> _iniciarChamada() async {
+    if (_ocupado || _alunos.isEmpty) {
+      if (_alunos.isEmpty) _mostrarErro('Esta disciplina não tem alunos.');
+      return;
+    }
     setState(() => _ocupado = true);
     try {
-      await acao();
+      await widget.professorApi.abrirChamada(_turma.id);
+      if (!mounted) return;
+      setState(() {
+        _chamadaAtiva = true;
+        _scannerPausado = false;
+        _avisoNfc = null;
+      });
+      if (!await _nfc.estaDisponivel()) {
+        if (!mounted) return;
+        setState(() {
+          _scannerPausado = true;
+          _avisoNfc = 'NFC indisponível. Você pode ajustar a chamada manualmente.';
+        });
+        return;
+      }
+      _armarLeitura();
     } on ApiException catch (e) {
-      _erro(e);
+      _mostrarErro(e.message);
     } finally {
       if (mounted) setState(() => _ocupado = false);
     }
   }
 
-  Future<void> _editar() async {
-    final editada = await Navigator.of(context).push<Turma>(
-      MaterialPageRoute(
-        builder: (_) => TurmaFormPage(api: widget.api, turma: _turma),
-      ),
+  void _armarLeitura() {
+    if (!mounted || !_chamadaAtiva || _scannerPausado || _lendoNfc) return;
+    setState(() => _lendoNfc = true);
+    unawaited(
+      _nfc
+          .lerCartao(
+            onTagLida: (tag) {
+              if (!mounted || !_chamadaAtiva) return;
+              setState(() => _lendoNfc = false);
+              final uid = NfcService.uidDoTag(tag);
+              if (uid == null) {
+                setState(
+                  () => _avisoNfc = 'Não foi possível identificar o cartão.',
+                );
+              } else {
+                _marcarCartao(uid);
+              }
+              Future<void>.delayed(const Duration(milliseconds: 350), () {
+                if (mounted) _armarLeitura();
+              });
+            },
+            onErro: () {
+              if (!mounted || !_chamadaAtiva) return;
+              setState(() {
+                _lendoNfc = false;
+                _scannerPausado = true;
+                _avisoNfc = 'Falha ao ler NFC. Tente retomar a leitura.';
+              });
+            },
+          )
+          .catchError((Object error) {
+            if (!mounted || !_chamadaAtiva) return;
+            setState(() {
+              _lendoNfc = false;
+              _scannerPausado = true;
+              _avisoNfc = 'Falha ao iniciar a leitura NFC: $error';
+            });
+          }),
     );
-    if (editada != null) _atualizar(editada);
   }
 
-  Future<void> _excluir() async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Excluir aula?'),
-        content: Text('A turma "${_turma.name}" será removida.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            key: const Key('confirmar-excluir'),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
-    );
-    if (confirmar != true || !mounted) return;
-    await _executar(() async {
-      await widget.api.excluir(_turma.id);
-      widget.onDeleted();
-      if (mounted) Navigator.of(context).pop();
+  void _marcarCartao(String uid) {
+    final normalizado = uid.trim().replaceAll(':', '').toUpperCase();
+    AlunoChamada? alunoEncontrado;
+    for (final aluno in _alunos.values) {
+      if (aluno.nfcUid?.trim().replaceAll(':', '').toUpperCase() ==
+          normalizado) {
+        alunoEncontrado = aluno;
+        break;
+      }
+    }
+    if (alunoEncontrado == null) {
+      setState(() => _avisoNfc = 'Cartão não vinculado a aluno desta disciplina.');
+      return;
+    }
+    if (_presencas[alunoEncontrado.id] == true) {
+      setState(() => _avisoNfc = '${alunoEncontrado!.name} já está presente.');
+      return;
+    }
+    setState(() {
+      _presencas[alunoEncontrado!.id] = true;
+      _avisoNfc = '${alunoEncontrado.name} marcado como presente.';
     });
   }
 
-  Future<void> _remover(String alunoId) => _executar(() async {
-    _atualizar(await widget.api.removerAluno(_turma.id, alunoId));
-  });
-
-  /// Abre a chamada (janela de 5 minutos) e deixa o professor encostar os
-  /// cartões dos alunos; cada leitura marca o aluno como presente.
-  Future<void> _validarPresenca() => _executar(() async {
-    await widget.professorApi.abrirChamada(_turma.id);
+  Future<void> _revisarChamada() async {
+    if (!_chamadaAtiva || _ocupado) return;
+    setState(() {
+      _ocupado = true;
+      _scannerPausado = true;
+      _lendoNfc = false;
+    });
+    await _nfc.parar();
     if (!mounted) return;
-    await Navigator.of(context).push(
-      nfcRoute(
-        NfcInstrucaoPage(
-          nomeDisciplina: _turma.name,
-          nfcService: widget.nfcService,
-          onValidarPresenca: (uid) async {
-            await widget.professorApi.presencaPorNfc(_turma.id, [uid]);
-            return true;
-          },
+    setState(() => _ocupado = false);
+
+    final resultado = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => RevisaoChamadaScreen(
+          turma: _turma,
+          alunos: _alunos.values.toList(),
+          presencas: _presencas,
+          professorApi: widget.professorApi,
+          avisoLeitura: _avisoNfc,
         ),
       ),
     );
-  });
+    if (resultado == true && mounted) {
+      setState(() {
+        _chamadaAtiva = false;
+        _avisoNfc = null;
+      });
+      await _carregar();
+    }
+  }
+
+  Future<void> _retomarLeitura() async {
+    if (!await _nfc.estaDisponivel()) {
+      if (mounted) {
+        setState(
+          () => _avisoNfc =
+              'NFC indisponível. Você pode revisar a chamada manualmente.',
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _scannerPausado = false;
+      _avisoNfc = null;
+    });
+    _armarLeitura();
+  }
+
+  int get _presentes => _presencas.values.where((presente) => presente).length;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      title: const Text(
-        'Detalhe da aula',
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          letterSpacing: -1,
-          color: Color(0xFF1E1E1E),
-        ),
+  Widget build(BuildContext context) {
+    final frequencia = _frequenciaGeral?.percentage ?? 0;
+    final alunos = _alunosFiltrados;
+    return Scaffold(
+      backgroundColor: const Color(0xFF1E1E1E),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1E1E1E),
+        foregroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Gestão da Disciplina'),
       ),
-      bottom: _ocupado
-          ? const PreferredSize(
-              preferredSize: Size.fromHeight(2),
-              child: LinearProgressIndicator(minHeight: 2),
-            )
-          : null,
-      actions: [
-        IconButton(
-          tooltip: 'Editar aula',
-          onPressed: _ocupado ? null : _editar,
-          icon: const Icon(Icons.edit_outlined),
+      body: SafeArea(
+        child: _carregando
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFFF9FF2E)),
+              )
+            : _erro != null
+            ? _ErroDisciplina(mensagem: _erro!, onTentar: _carregar)
+            : Column(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                      children: [
+                        Text(
+                          '${_turma.name} · ${_turma.week} · ${_turma.horario}',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        _CartaoFrequencia(
+                          percentual: frequencia,
+                          matriculados: _alunos.length,
+                        ),
+                        if (_chamadaAtiva) ...[
+                          const SizedBox(height: 12),
+                          _StatusChamada(
+                            lendoNfc: _lendoNfc,
+                            presentes: _presentes,
+                            ausentes: _alunos.length - _presentes,
+                            aviso: _avisoNfc,
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Alunos matriculados',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              _alunos.length.toString().padLeft(2, '0'),
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          key: const Key('buscar-aluno-chamada'),
+                          controller: _busca,
+                          style: const TextStyle(color: Colors.black),
+                          decoration: InputDecoration(
+                            hintText: 'Buscar por nome ou RA',
+                            prefixIcon: const Icon(Icons.search),
+                            filled: true,
+                            fillColor: const Color(0xFFFEFFD9),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (alunos.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 28),
+                            child: Text(
+                              'Nenhum aluno encontrado.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          )
+                        else
+                          for (final aluno in alunos)
+                            _FrequenciaAluno(
+                              aluno: aluno,
+                              frequencia: _frequencias[aluno.id]?.percentage,
+                            ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                    child: _BotaoChamada(
+                      ocupado: _ocupado,
+                      chamadaAtiva: _chamadaAtiva,
+                      leituraAtiva: _lendoNfc,
+                      onIniciar: _iniciarChamada,
+                      onRevisar: _revisarChamada,
+                      onRetomar: _retomarLeitura,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _CartaoFrequencia extends StatelessWidget {
+  const _CartaoFrequencia({
+    required this.percentual,
+    required this.matriculados,
+  });
+
+  final double percentual;
+  final int matriculados;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF9FF2E),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Frequência geral'),
+        const SizedBox(height: 2),
+        Text(
+          '${percentual.toStringAsFixed(0)}%',
+          style: const TextStyle(
+            fontSize: 42,
+            height: 1.1,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        IconButton(
-          tooltip: 'Excluir aula',
-          onPressed: _ocupado ? null : _excluir,
-          icon: const Icon(Icons.delete_outline),
+        const SizedBox(height: 8),
+        const Text('Acumulada no semestre', style: TextStyle(fontSize: 11)),
+        const SizedBox(height: 5),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: (percentual / 100).clamp(0, 1),
+            minHeight: 5,
+            backgroundColor: Colors.black26,
+            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF1E1E1E)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '$matriculados ${matriculados == 1 ? 'aluno matriculado' : 'alunos matriculados'}',
+          style: const TextStyle(fontSize: 11),
         ),
       ],
     ),
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(24),
+  );
+}
+
+class _StatusChamada extends StatelessWidget {
+  const _StatusChamada({
+    required this.lendoNfc,
+    required this.presentes,
+    required this.ausentes,
+    required this.aviso,
+  });
+
+  final bool lendoNfc;
+  final int presentes;
+  final int ausentes;
+  final String? aviso;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFEFFD9),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          lendoNfc ? 'Aproxime os cartões NFC' : 'Leitura pausada',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        Text('$presentes presentes · $ausentes ausentes'),
+        if (aviso != null)
+          Text(aviso!, style: const TextStyle(color: Colors.black54)),
+      ],
+    ),
+  );
+}
+
+class _FrequenciaAluno extends StatelessWidget {
+  const _FrequenciaAluno({required this.aluno, required this.frequencia});
+
+  final AlunoChamada aluno;
+  final double? frequencia;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFEFFD9),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                aluno.name,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              Text(
+                'RA ${aluno.ra}',
+                style: const TextStyle(fontSize: 10, color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+        Text(
+          '${(frequencia ?? 0).toStringAsFixed(0)}%',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ],
+    ),
+  );
+}
+
+class _BotaoChamada extends StatelessWidget {
+  const _BotaoChamada({
+    required this.ocupado,
+    required this.chamadaAtiva,
+    required this.leituraAtiva,
+    required this.onIniciar,
+    required this.onRevisar,
+    required this.onRetomar,
+  });
+
+  final bool ocupado;
+  final bool chamadaAtiva;
+  final bool leituraAtiva;
+  final VoidCallback onIniciar;
+  final VoidCallback onRevisar;
+  final VoidCallback onRetomar;
+
+  Widget _botao(String label, VoidCallback action, {Key? key}) => SizedBox(
+    width: double.infinity,
+    height: 48,
+    child: FilledButton(
+      key: key,
+      onPressed: ocupado ? null : action,
+      style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFFF9FF2E),
+        foregroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      child: Text(label),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    if (!chamadaAtiva) {
+      return _botao(
+        'Iniciar chamada',
+        onIniciar,
+        key: const Key('validar-presenca'),
+      );
+    }
+    if (leituraAtiva) {
+      return _botao(
+        'Encerrar leitura e revisar',
+        onRevisar,
+        key: const Key('chamada-finalizar-leitura'),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _botao(
+          'Retomar leitura NFC',
+          onRetomar,
+          key: const Key('chamada-retomar-leitura'),
+        ),
+        TextButton(
+          key: const Key('chamada-ver-revisao'),
+          onPressed: ocupado ? null : onRevisar,
+          child: const Text(
+            'Revisar chamada manualmente',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ErroDisciplina extends StatelessWidget {
+  const _ErroDisciplina({required this.mensagem, required this.onTentar});
+
+  final String mensagem;
+  final VoidCallback onTentar;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9FF2E),
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _turma.name,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    height: 1.1,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -1.4,
-                    color: Color(0xFF1E1E1E),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(_turma.week, style: const TextStyle(fontSize: 16)),
-                Text(
-                  _turma.horario,
-                  style: const TextStyle(fontSize: 14, color: Colors.black54),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            key: const Key('validar-presenca'),
-            onPressed: _validarPresenca,
-            icon: const Icon(Icons.contactless),
-            label: const Text('Validar presença por NFC'),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF1E1E1E),
-              foregroundColor: Colors.white,
-              shape: const StadiumBorder(),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Alunos (${_turma.enrolledStudents.length})',
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -1.4,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (_removidos > 0 || _avisoAlunos != null)
-            Container(
-              key: const Key('aviso-alunos'),
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0x22E53935),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                _avisoAlunos ??
-                    (_removidos == 1
-                        ? '1 aluno removido, não encontrado.'
-                        : '$_removidos alunos removidos, não encontrados.'),
-              ),
-            ),
-          if (_turma.enrolledStudents.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: Text('Nenhum aluno matriculado.')),
-            )
-          else
-            for (final id in _turma.enrolledStudents)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                // Enquanto os nomes carregam (ou se falharem), mostra o ID.
-                title: Text(_nomes[id]?.name ?? 'Aluno $id'),
-                subtitle: _nomes[id] == null
-                    ? null
-                    : Text('RA ${_nomes[id]!.ra}'),
-                trailing: IconButton(
-                  tooltip: 'Remover ${_nomes[id]?.name ?? id}',
-                  onPressed: _ocupado ? null : () => _remover(id),
-                  icon: const Icon(Icons.remove_circle_outline),
-                ),
-              ),
+          Text(mensagem, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          FilledButton(onPressed: onTentar, child: const Text('Tentar novamente')),
         ],
       ),
     ),

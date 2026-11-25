@@ -2,20 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'auth_api.dart';
-import 'screens/cadastro_screen.dart';
 import 'screens/home_page.dart';
+import 'screens/professor_home_page.dart';
+import 'professor_api.dart';
 import 'turmas_api.dart';
-import 'turmas_page.dart';
 
 /// Tela inicial de cada perfil: aluno vê a home com as aulas do dia e
-/// professor vê a lista de turmas.
-Widget telaInicialPara(String? role) =>
-    role == 'PROFESSOR' ? const TurmasPage() : const HomePage();
+/// professor vê sua home com as aulas do dia.
+Widget telaInicialPara(
+  String? role, {
+  ProfessorApi? professorApi,
+  TurmasApi? turmasApi,
+}) =>
+    role == 'PROFESSOR'
+    ? ProfessorHomePage(api: professorApi, turmasApi: turmasApi)
+    : const HomePage();
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key, this.auth});
+  const LoginPage({super.key, this.auth, this.professorApi, this.turmasApi});
 
   final AuthApi? auth;
+  final ProfessorApi? professorApi;
+  final TurmasApi? turmasApi;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -52,7 +60,13 @@ class _LoginPageState extends State<LoginPage> {
       final usuario = await _auth.login(_identifier.text, _password.text);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => telaInicialPara(usuario.role)),
+        MaterialPageRoute(
+          builder: (_) => telaInicialPara(
+            usuario.role,
+            professorApi: widget.professorApi,
+            turmasApi: widget.turmasApi,
+          ),
+        ),
       );
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -264,20 +278,6 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                       const SizedBox(height: 32),
                       const Spacer(),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const CadastroScreen(),
-                          ),
-                        ),
-                        child: const Text(
-                          'Criar cadastro',
-                          style: TextStyle(
-                            color: Color(0xFF1E1E1E),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
                       const SizedBox(height: 8),
                       SizedBox(
                         width: 165,

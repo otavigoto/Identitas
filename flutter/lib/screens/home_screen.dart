@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../models.dart' show Usuario;
+import '../services/attendance_service.dart';
+import '../turmas_page.dart';
 import 'carteirinha_screen.dart';
 import 'historico_screen.dart';
 import 'nfc_instrucao_page.dart';
 import 'screens_shared.dart';
-import '../models.dart' show Usuario;
-import '../services/attendance_service.dart';
-import 'revisao_chamada_screen.dart';
 
 enum StatusAula { presente, proxima, agendado }
 
@@ -75,15 +75,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _abrirNfc(BuildContext context) async {
     if (widget.user?.isProfessor == true) {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => RevisaoChamadaScreen(
-            classId: _aulas.isEmpty ? null : _aulas.first.id,
-            initialDate: DateTime.now(),
-            teacherId: widget.user?.id,
-          ),
-        ),
-      );
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const TurmasPage()));
       return;
     }
 
@@ -102,11 +96,9 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_) => NfcInstrucaoPage(
           nomeDisciplina: aula.name,
           onValidarPresenca: (nfcUid) async {
-            await _attendance.markAttendanceByNfc(
-              aula.id,
-              [nfcUid],
-              date: DateTime.now(),
-            );
+            await _attendance.markAttendanceByNfc(aula.id, [
+              nfcUid,
+            ], date: DateTime.now());
             return true;
           },
         ),
@@ -285,20 +277,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                       ),
-                      child:                       Column(
+                      child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                          widget.user?.isProfessor == true
-                              ? Icons.fact_check_outlined
-                              : Icons.contactless,
+                            widget.user?.isProfessor == true
+                                ? Icons.fact_check_outlined
+                                : Icons.contactless,
                             color: IdentitasColors.amarelo,
                             size: 34,
                           ),
                           Text(
-                          widget.user?.isProfessor == true
-                              ? 'CHAMADA'
-                              : 'NFC',
+                            widget.user?.isProfessor == true
+                                ? 'CHAMADA'
+                                : 'NFC',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 10,
@@ -430,9 +422,21 @@ class _Selo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (texto, fundo, ponto) = switch (status) {
-      StatusAula.presente => ('PRESENTE', const Color(0xFFB6F7A1), const Color(0xFF22C70B)),
-      StatusAula.proxima => ('PRÓXIMA', const Color(0xFFFFD3A3), const Color(0xFFFF7A00)),
-      StatusAula.agendado => ('AGENDADO', const Color(0xFFC9C9B8), const Color(0xFF5E5E5E)),
+      StatusAula.presente => (
+        'PRESENTE',
+        const Color(0xFFB6F7A1),
+        const Color(0xFF22C70B),
+      ),
+      StatusAula.proxima => (
+        'PRÓXIMA',
+        const Color(0xFFFFD3A3),
+        const Color(0xFFFF7A00),
+      ),
+      StatusAula.agendado => (
+        'AGENDADO',
+        const Color(0xFFC9C9B8),
+        const Color(0xFF5E5E5E),
+      ),
     };
 
     return Container(

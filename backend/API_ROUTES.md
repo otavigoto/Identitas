@@ -57,7 +57,7 @@ Todas as rotas de `/users` exigem access token.
 | `GET` | `/users/profile/:id` | `STUDENT`, `PROFESSOR` | Busca perfil pelo ID MongoDB. |
 | `PATCH` | `/users/:id` | `STUDENT`, `PROFESSOR` | Atualiza os campos enviados para o usuário indicado. |
 | `DELETE` | `/users/:id` | `STUDENT`, `PROFESSOR` | Remove o usuário indicado. |
-| `PATCH` | `/users/:id/nfc` | `STUDENT`, `PROFESSOR` | Vincula um NFC UID ao usuário indicado. O UID é normalizado para maiúsculas e não pode estar vinculado a outro usuário. |
+| `PATCH` | `/users/:id/nfc` | `STUDENT`, `PROFESSOR`, somente a própria conta | Vincula um NFC UID ao usuário indicado. O UID é normalizado para maiúsculas, não pode estar vinculado a outro usuário e a resposta não contém a senha. |
 
 O body de criação aceita `name`, `ra`, `course`, `periodSemester`, `password`,
 `role` (`STUDENT` ou `PROFESSOR`) e, opcionalmente, `nfcUid`. O body de
@@ -113,6 +113,7 @@ token; não envie RA ou NFC UID como parâmetro de usuário.
 | `GET` | `/classes/:id/students/all` | `PROFESSOR` responsável pela turma | Retorna o resumo geral e o histórico de frequência dos alunos da turma. |
 | `GET` | `/classes/:id/attendance/summary` | `PROFESSOR` responsável pela turma | Retorna frequência geral da turma e frequência/histórico de cada aluno. |
 | `PATCH` | `/classes/:id/attendance/open` | `PROFESSOR` responsável pela turma | Abre a chamada e inicia a janela de cinco minutos para registrar presença. |
+| `PATCH` | `/classes/:id/attendance/close` | `PROFESSOR` responsável pela turma | Fecha a chamada da turma após enviar a lista completa de presença. |
 | `POST` | `/classes/:id/students/attendance` | `PROFESSOR` responsável pela turma | Registra ou atualiza a presença da turma. Retorna HTTP `200`. |
 | `POST` | `/classes/:id/students/attendance/nfc` | `PROFESSOR` responsável pela turma | Marca como presentes os alunos identificados pelos NFC UIDs enviados. Retorna HTTP `200`. |
 | `POST` | `/classes/:id/attendance/scan-professor` | `STUDENT` matriculado na turma | Valida o NFC do professor da turma e registra a presença do aluno autenticado. Retorna HTTP `200`. |
@@ -172,7 +173,8 @@ chamada completa exige todos os matriculados: remova-os da turma antes
 - `400 Bad Request`: body inválido, ID inválido, aluno não matriculado, chamada
   fechada/expirada ou lista de presença incompleta.
 - `401 Unauthorized`: access token ausente, inválido ou expirado.
-- `403 Forbidden`: role sem permissão ou tentativa de consultar o ID de outro
-  estudante/professor nas rotas que comparam o ID com o token.
+- `403 Forbidden`: role sem permissão, tentativa de consultar o ID de outro
+  estudante/professor nas rotas que comparam o ID com o token ou tentativa de
+  vincular NFC a outra conta.
 - `404 Not Found`: usuário, turma ou NFC não encontrado; também é retornado
   quando um professor tenta acessar turma que não lhe pertence.
