@@ -103,7 +103,7 @@ class _NfcInstrucaoPageState extends State<NfcInstrucaoPage> {
   Future<void> _cancelar() async {
     if (_cancelando) return;
     setState(() => _cancelando = true);
-    await _nfc.parar();
+    await _nfc.parar(imediato: true);
     if (!mounted) return;
     Navigator.of(context).pop();
   }

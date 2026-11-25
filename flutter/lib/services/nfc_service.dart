@@ -16,6 +16,10 @@ class NfcReadException implements Exception {
 
 class NfcService {
   bool _ativo = false;
+  int _geracao = 0;
+
+  /// Tempo de espera antes de fechar a sessão após a leitura.
+  static const atraso = Duration(milliseconds: 1500);
 
   static String? uidDoTag(NfcTag tag) {
     final identifier = switch (defaultTargetPlatform) {
@@ -93,6 +97,7 @@ class NfcService {
     required VoidCallback onErro,
   }) async {
     _ativo = true;
+    _geracao++;
     try {
       await NfcManager.instance.startSession(
         pollingOptions: const {NfcPollingOption.iso14443},
@@ -102,7 +107,9 @@ class NfcService {
           onErro();
         },
         onDiscovered: (tag) async {
-          await parar();
+          // Encerra com atraso: se a sessão fechar com o cartão ainda
+          // encostado, o Android abre a tela "nova marca digitalizada".
+          unawaited(parar());
           onTagLida(tag);
         },
       );
@@ -115,9 +122,15 @@ class NfcService {
     }
   }
 
-  Future<void> parar() async {
+  /// Encerra a sessão. Por padrão espera [atraso] para o usuário afastar o
+  /// cartão; use [imediato] ao cancelar. Se uma nova sessão começar nesse
+  /// intervalo, o encerramento pendente é descartado.
+  Future<void> parar({bool imediato = false}) async {
     if (!_ativo) return;
     _ativo = false;
+    final geracao = _geracao;
+    if (!imediato) await Future<void>.delayed(atraso);
+    if (geracao != _geracao) return;
     await NfcManager.instance.stopSession();
   }
 }
