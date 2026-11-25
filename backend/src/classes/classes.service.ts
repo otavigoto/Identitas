@@ -53,8 +53,8 @@ export class ClassesService {
     });
   }
 
-  async remove(id: string): Promise<ClassDocument> {
-    this.validateClassId(id);
+  async remove(id: string, teacherId: string): Promise<ClassDocument> {
+    await this.findOwned(id, teacherId);
     const deletedClass = await this.classModel.findByIdAndDelete(id).exec();
 
     if (!deletedClass) {
@@ -67,8 +67,9 @@ export class ClassesService {
   async update(
     id: string,
     updateClassDto: UpdateClassDto,
+    teacherId: string,
   ): Promise<ClassDocument> {
-    this.validateClassId(id);
+    await this.findOwned(id, teacherId);
     const updatedClass = await this.classModel
       .findByIdAndUpdate(id, updateClassDto, {
         new: true,
@@ -83,11 +84,14 @@ export class ClassesService {
     return updatedClass;
   }
 
+  /** Lista só as turmas do professor informado (nunca as de outros). */
   async findAll(
+    teacherId: string,
     week?: string,
     attendanceStatus?: string,
   ): Promise<ClassDocument[]> {
-    const filters: Record<string, string> = {};
+    this.validateReference(teacherId, 'Professor');
+    const filters: Record<string, string> = { id_professor: teacherId };
 
     if (week) {
       filters.week = week;
@@ -108,6 +112,13 @@ export class ClassesService {
       throw new NotFoundException('Turma não encontrada.');
     }
 
+    return foundClass;
+  }
+
+  /** Busca a turma só se ela for do professor; senão, 404 como se não existisse. */
+  async findOwned(id: string, teacherId: string): Promise<ClassDocument> {
+    const foundClass = await this.findOne(id);
+    this.assertClassTeacher(foundClass, teacherId);
     return foundClass;
   }
 
@@ -416,8 +427,12 @@ export class ClassesService {
       .exec();
   }
 
-  async addStudent(id: string, studentIds: string[]): Promise<ClassDocument> {
-    this.validateClassId(id);
+  async addStudent(
+    id: string,
+    studentIds: string[],
+    teacherId: string,
+  ): Promise<ClassDocument> {
+    await this.findOwned(id, teacherId);
     if (!studentIds || studentIds.length === 0) {
       throw new BadRequestException('A lista de alunos não pode estar vazia.');
     }
@@ -441,8 +456,9 @@ export class ClassesService {
   async removeStudent(
     id: string,
     studentIds: string[],
+    teacherId: string,
   ): Promise<ClassDocument> {
-    this.validateClassId(id);
+    await this.findOwned(id, teacherId);
 
     if (!studentIds || studentIds.length === 0) {
       throw new BadRequestException('A lista de alunos não pode estar vazia.');

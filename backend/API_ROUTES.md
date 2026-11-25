@@ -71,26 +71,24 @@ atualização aceita um subconjunto desses campos. Para atribuir NFC:
 
 ### CRUD e matrícula
 
-As rotas desta tabela não declaram guard de autenticação no controller.
+Todas exigem access token e perfil `PROFESSOR`, e só funcionam em turmas **do
+próprio professor** (turma de outro professor responde `404`, como se não
+existisse).
 
-| Método | Rota | Acesso declarado | O que faz |
+| Método | Rota | Acesso | O que faz |
 | --- | --- | --- | --- |
-| `POST` | `/classes` | Público | Cria uma turma/disciplina. |
-| `GET` | `/classes` | Público | Lista turmas. Aceita query params `disciplina` e `semestre`; atualmente `disciplina` filtra o campo `week` e `semestre` filtra `attendanceStatus`. |
-| `GET` | `/classes/:id` | Público | Busca uma turma pelo ID MongoDB. |
-| `PATCH` | `/classes/:id` | Público | Atualiza os campos enviados da turma. |
-| `DELETE` | `/classes/:id` | Público | Remove a turma. |
-| `POST` | `/classes/:id/students` | Público | Adiciona alunos à turma sem duplicar IDs já matriculados. Recebe `{ "enrolledStudents": ["<studentId>"] }`. |
-| `DELETE` | `/classes/:id/students/:studentId` | Público | Remove um aluno da turma. |
+| `POST` | `/classes` | `PROFESSOR` | Cria uma turma/disciplina. `id_professor` precisa ser o do token (senão `403`). |
+| `GET` | `/classes` | `PROFESSOR` | Lista as turmas do professor logado. Aceita query params `disciplina` e `semestre`; atualmente `disciplina` filtra o campo `week` e `semestre` filtra `attendanceStatus`. |
+| `GET` | `/classes/:id` | `PROFESSOR` dono da turma | Busca uma turma pelo ID MongoDB. |
+| `PATCH` | `/classes/:id` | `PROFESSOR` dono da turma | Atualiza os campos enviados. Não é possível trocar `id_professor` (`403`). |
+| `DELETE` | `/classes/:id` | `PROFESSOR` dono da turma | Remove a turma. |
+| `POST` | `/classes/:id/students` | `PROFESSOR` dono da turma | Adiciona alunos à turma sem duplicar IDs já matriculados. Recebe `{ "enrolledStudents": ["<studentId>"] }`. |
+| `DELETE` | `/classes/:id/students/:studentId` | `PROFESSOR` dono da turma | Remove um aluno da turma (aceita também IDs antigos malformados). |
 
 O body de criação da turma inclui `name`, `id_professor`, `week`, `startTime`,
 `endTime` e `attendanceStatus` (`open` ou `closed`). Também pode incluir
 `enrolledStudents`, `qtdAulas`, `attendanceTime` e `attendanceList`. Os horários
 devem usar `HH:mm`.
-
-> **Atenção:** “Público” significa que essas rotas não têm `JwtAuthGuard` no
-> controller atualmente. Não envie dados sensíveis assumindo que elas exigem
-> autenticação.
 
 ### Aulas do usuário autenticado
 

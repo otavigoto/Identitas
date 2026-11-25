@@ -33,32 +33,72 @@ export class ClassesController {
 
   // CRUD CLASSES -----------------------
 
+  // Só o professor mexe em turmas, e apenas nas dele.
+
   @Post()
-  create(@Body() createClassDto: CreateClassDto) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
+  create(
+    @Body() createClassDto: CreateClassDto,
+    @Req() req: Request & { user: JwtPayload },
+  ) {
+    if (createClassDto.id_professor !== req.user.sub) {
+      throw new ForbiddenException(
+        'Não é possível criar turma em nome de outro professor.',
+      );
+    }
     return this.classesService.create(createClassDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.classesService.remove(id);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
+  remove(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtPayload },
+  ) {
+    return this.classesService.remove(id, req.user.sub);
   }
 
+  /** Lista as turmas do professor logado (filtros opcionais). */
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
   findAll(
+    @Req() req: Request & { user: JwtPayload },
     @Query('disciplina') disciplina?: string,
     @Query('semestre') semestre?: string,
   ) {
-    return this.classesService.findAll(disciplina, semestre);
+    return this.classesService.findAll(req.user.sub, disciplina, semestre);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateClassDto: UpdateClassDto) {
-    return this.classesService.update(id, updateClassDto);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
+  update(
+    @Param('id') id: string,
+    @Body() updateClassDto: UpdateClassDto,
+    @Req() req: Request & { user: JwtPayload },
+  ) {
+    if (
+      updateClassDto.id_professor !== undefined &&
+      updateClassDto.id_professor !== req.user.sub
+    ) {
+      throw new ForbiddenException(
+        'Não é possível passar a turma para outro professor.',
+      );
+    }
+    return this.classesService.update(id, updateClassDto, req.user.sub);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.classesService.findOne(id);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
+  findOne(
+    @Param('id') id: string,
+    @Req() req: Request & { user: JwtPayload },
+  ) {
+    return this.classesService.findOwned(id, req.user.sub);
   }
 
   // FIM CRUD CLASSES -----------------------
@@ -127,23 +167,30 @@ export class ClassesController {
   }
 
   @Post(':id/students')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
   @HttpCode(HttpStatus.OK)
   addStudent(
     @Param('id') id: string,
     @Body() manageClassStudentDto: ManageClassStudentDto,
+    @Req() req: Request & { user: JwtPayload },
   ) {
     return this.classesService.addStudent(
       id,
       manageClassStudentDto.enrolledStudents,
+      req.user.sub,
     );
   }
 
   @Delete(':id/students/:studentId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PROFESSOR)
   removeStudent(
     @Param('id') id: string,
     @Param('studentId') studentId: string,
+    @Req() req: Request & { user: JwtPayload },
   ) {
-    return this.classesService.removeStudent(id, [studentId]);
+    return this.classesService.removeStudent(id, [studentId], req.user.sub);
   }
 
   // Funções de presença -----------------------

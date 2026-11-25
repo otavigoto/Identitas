@@ -57,6 +57,18 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+## Configuração (.env)
+
+Copie `.env.example` para `.env` e preencha:
+
+- `MONGODB`: string de conexão do MongoDB.
+- `JWT_SECRET`: segredo que assina os tokens (**obrigatório**, mínimo 16
+  caracteres; o servidor não sobe sem ele). Gere um com
+  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+
+Cada pessoa do grupo usa o seu `.env`; ele nunca vai para o Git. Trocar o
+`JWT_SECRET` invalida os logins existentes (é só entrar de novo).
+
 ## Identitas: autenticação e aulas
 
 As rotas abaixo recebem `Authorization: Bearer <accessToken>`. O `sub` do token
