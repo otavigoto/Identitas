@@ -1,25 +1,49 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../api_config.dart';
 import '../login_page.dart';
 import '../models/user_profile.dart';
-import '../profile_api.dart';
 import 'user_profile_card.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key, this.initialProfile});
+  const ProfileScreen({
+    super.key,
+    this.initialProfile,
+    this.token,
+    this.baseUrl,
+  });
 
+  /// Perfil inicial para exibição imediata (útil em testes ou cache)
   final UserProfile? initialProfile;
+
+  /// Token JWT Bearer. Se omitido, usará [ApiConfig.token].
+  final String? token;
+
+  /// URL base do backend. Se omitida, usará 'http://163.176.12.54:3000'.
+  final String? baseUrl;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  late final ProfileApi _profileApi;
   UserProfile? _profile;
   bool _isLoading = false;
   String? _errorMessage;
+
+  /// Endereço padrão do backend conforme fornecido pela equipe
+  static const String _defaultBackendUrl = 'http://163.176.12.54:3000';
+
+  String get _effectiveBaseUrl =>
+      widget.baseUrl ??
+      (ApiConfig.baseUrl.contains('163.176.12.54')
+          ? ApiConfig.baseUrl
+          : _defaultBackendUrl);
+
+  String? get _effectiveToken => widget.token ?? ApiConfig.token;
 
   static const List<String> _samplePhotos = [
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300',
@@ -30,7 +54,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _profileApi = ProfileApi();
 
     if (widget.initialProfile != null) {
       _profile = widget.initialProfile;
@@ -39,43 +62,94 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// Busca os dados do perfil autenticado através da rota GET /auth/profile
+  /// enviando o token JWT no cabeçalho Authorization: Bearer <token>.
   Future<void> _carregarPerfil() async {
-    if (ApiConfig.currentUser != null) {
+    final token = _effectiveToken;
+
+    // Se não houver token configurado, avisamos o usuário e exibimos o modo demonstração
+    if (token == null || token.isEmpty) {
       setState(() {
-        _profile = ApiConfig.currentUser;
+        _profile = UserProfile.mockProfessor();
+        _errorMessage =
+            'Nenhum token JWT encontrado. Para carregar os dados reais, realize o login.';
       });
       return;
     }
 
-    if (ApiConfig.token != null && ApiConfig.token!.isNotEmpty) {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-      });
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-      try {
-        final perfilCarregado = await _profileApi.obterPerfil();
-        if (mounted) {
-          setState(() {
-            _profile = perfilCarregado;
-            ApiConfig.currentUser = perfilCarregado;
-            _isLoading = false;
-          });
-        }
-        return;
-      } catch (e) {
-        if (mounted) {
-          setState(() {
-            _errorMessage = e.toString();
-            _isLoading = false;
-          });
-        }
+    try {
+      final uri = Uri.parse('$_effectiveBaseUrl/auth/profile');
+
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final Map<String, dynamic> data =
+            jsonDecode(response.body) as Map<String, dynamic>;
+
+        setState(() {
+          _profile = UserProfile.fromJson(data);
+          _isLoading = false;
+          _errorMessage = null;
+        });
+      } else if (response.statusCode == 401) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage =
+              'Sessão expirada ou token inválido (401). Faça login novamente.';
+          _profile ??= UserProfile.mockProfessor();
+        });
+      } else {
+        String detalheErro = 'Erro ${response.statusCode} ao carregar perfil.';
+        try {
+          final body = jsonDecode(response.body);
+          if (body is Map && body['message'] != null) {
+            detalheErro = body['message'] is List
+                ? (body['message'] as List).join('\n')
+                : body['message'].toString();
+          }
+        } catch (_) {}
+
+        setState(() {
+          _isLoading = false;
+          _errorMessage = detalheErro;
+          _profile ??= UserProfile.mockProfessor();
+        });
+      }
+    } on TimeoutException {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage =
+              'Tempo esgotado ao conectar ao servidor em $_effectiveBaseUrl.';
+          _profile ??= UserProfile.mockProfessor();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage =
+              'Não foi possível conectar ao servidor ($_effectiveBaseUrl). Verifique sua conexão.';
+          _profile ??= UserProfile.mockProfessor();
+        });
       }
     }
-
-    setState(() {
-      _profile = UserProfile.mockProfessor();
-    });
   }
 
   void _abrirModalFoto() {
@@ -216,7 +290,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _fazerLogout() {
     ApiConfig.token = null;
-    ApiConfig.currentUser = null;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (route) => false,
@@ -290,14 +363,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       size: 20,
                                     ),
                                     const SizedBox(width: 8),
-                                    const Expanded(
+                                    Expanded(
                                       child: Text(
-                                        'Exibindo dados locais (modo demonstração).',
-                                        style: TextStyle(
+                                        _errorMessage!,
+                                        style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 12,
                                         ),
                                       ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.refresh,
+                                        color: Colors.amber,
+                                        size: 20,
+                                      ),
+                                      tooltip: 'Tentar novamente',
+                                      onPressed: _carregarPerfil,
                                     ),
                                   ],
                                 ),
