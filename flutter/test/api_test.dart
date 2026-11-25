@@ -3,11 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:identitas/aluno_api.dart';
-import 'package:identitas/api_client.dart';
-import 'package:identitas/auth_api.dart';
-import 'package:identitas/professor_api.dart';
-import 'package:identitas/turmas_api.dart';
+import 'package:identitas/services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Registra as requisições e responde conforme [responder].

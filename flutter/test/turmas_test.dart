@@ -4,11 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:identitas/api_client.dart';
-import 'package:identitas/professor_api.dart';
+import 'package:identitas/services/api_service.dart';
 import 'package:identitas/services/nfc_service.dart';
-import 'package:identitas/turmas_api.dart';
-import 'package:identitas/turmas_page.dart';
+import 'package:identitas/screens/turmas_page.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
