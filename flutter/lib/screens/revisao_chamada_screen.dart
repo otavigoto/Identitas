@@ -34,18 +34,18 @@ class _RevisaoChamadaScreenState extends State<RevisaoChamadaScreen> {
   bool _ocupado = false;
   Map<String, bool>? _presencasSalvas;
 
-  List<AlunoChamada> get _presentes => widget.alunos
-      .where((aluno) => _presencas[aluno.id] == true)
-      .toList();
+  List<AlunoChamada> get _presentes =>
+      widget.alunos.where((aluno) => _presencas[aluno.id] == true).toList();
 
-  List<AlunoChamada> get _ausentes => widget.alunos
-      .where((aluno) => _presencas[aluno.id] != true)
-      .toList();
+  List<AlunoChamada> get _ausentes =>
+      widget.alunos.where((aluno) => _presencas[aluno.id] != true).toList();
 
   bool get _presencasAtuaisSalvas {
     final salvas = _presencasSalvas;
     if (salvas == null || salvas.length != _presencas.length) return false;
-    return _presencas.entries.every((entry) => salvas[entry.key] == entry.value);
+    return _presencas.entries.every(
+      (entry) => salvas[entry.key] == entry.value,
+    );
   }
 
   Future<void> _ajustar(AlunoChamada aluno) async {
@@ -70,25 +70,46 @@ class _RevisaoChamadaScreenState extends State<RevisaoChamadaScreen> {
     if (_ocupado) return;
     setState(() => _ocupado = true);
     try {
+      await widget.professorApi.abrirChamada(widget.turma.id);
+
+      ApiException? erroPresenca;
       if (!_presencasAtuaisSalvas) {
-        await widget.professorApi.enviarChamada(widget.turma.id, _presencas);
-        _presencasSalvas = Map<String, bool>.of(_presencas);
+        try {
+          await widget.professorApi.enviarChamada(widget.turma.id, _presencas);
+          _presencasSalvas = Map<String, bool>.of(_presencas);
+        } on ApiException catch (e) {
+          erroPresenca = e;
+        }
       }
-      await widget.professorApi.fecharChamada(widget.turma.id);
+
+      ApiException? erroFechamento;
+      try {
+        await widget.professorApi.fecharChamada(widget.turma.id);
+      } on ApiException catch (e) {
+        erroFechamento = e;
+      }
+
+      if (erroPresenca != null || erroFechamento != null) {
+        if (!mounted) return;
+        final mensagem = erroPresenca != null && erroFechamento != null
+            ? 'Não foi possível salvar a presença nem encerrar a chamada. '
+                  'Presença: ${erroPresenca.message} Fechamento: ${erroFechamento.message}'
+            : erroPresenca != null
+            ? 'Não foi possível salvar a presença: ${erroPresenca.message}'
+            : 'Presença salva, mas não foi possível encerrar a chamada: '
+                  '${erroFechamento!.message}';
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(mensagem)));
+        return;
+      }
+
       if (mounted) Navigator.of(context).pop(true);
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              _presencasAtuaisSalvas
-                  ? 'Presença salva, mas não foi possível encerrar a chamada: ${e.message}'
-                  : e.message,
-            ),
-          ),
-        );
+        ..showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _ocupado = false);
     }
@@ -312,9 +333,9 @@ class _CardRegistro extends StatelessWidget {
               ),
               child: Text(
                 'Ajustar',
-                style: identitasText(size: 11).copyWith(
-                  decoration: TextDecoration.underline,
-                ),
+                style: identitasText(
+                  size: 11,
+                ).copyWith(decoration: TextDecoration.underline),
               ),
             ),
           ],
@@ -392,10 +413,7 @@ class _AjustarPresencaState extends State<_AjustarPresenca> {
             style: identitasText(size: 10, color: Colors.black54),
           ),
           const SizedBox(height: 16),
-          Text(
-            'Selecione o registro correto',
-            style: identitasText(size: 13),
-          ),
+          Text('Selecione o registro correto', style: identitasText(size: 13)),
           const SizedBox(height: 8),
           _opcao('Presente', true),
           _opcao('Ausente', false),
