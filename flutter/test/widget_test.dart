@@ -4,12 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:identitas/api_client.dart';
-import 'package:identitas/auth_api.dart';
-import 'package:identitas/login_page.dart';
+import 'package:identitas/services/api_service.dart';
+import 'package:identitas/screens/login_page.dart';
 import 'package:identitas/main.dart';
-import 'package:identitas/professor_api.dart';
-import 'package:identitas/turmas_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -136,6 +133,7 @@ void main() {
   final password = find.byKey(const Key('login-password'));
   const message = 'Aulas de hoje';
   const homeMessage = 'Identitas';
+  const professorHomeMessage = 'Resumo de Hoje';
 
   testWidgets('Exibe a tela e exige os dois campos', (tester) async {
     await openLogin(tester);
@@ -187,8 +185,9 @@ void main() {
     await tester.enterText(password, 'senha123');
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
-    expect(find.text(message), findsOneWidget);
-    expect(find.text('Banco de Dados'), findsOneWidget);
+    expect(find.text(professorHomeMessage), findsOneWidget);
+    // Aparece no card da aula e, dependendo do horário, também em "Próxima Aula".
+    expect(find.text('Banco de Dados'), findsWidgets);
     expect(find.byKey(const Key('professor-abrir-perfil')), findsOneWidget);
     expect(find.byKey(const Key('professor-ver-todas-aulas')), findsOneWidget);
     expect(find.text('PRESENTE'), findsNothing);
@@ -207,7 +206,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Gestão da Disciplina'), findsOneWidget);
-    expect(find.text('Banco de Dados'), findsOneWidget);
+    expect(find.textContaining('Banco de Dados'), findsOneWidget);
     expect(find.text('Frequência geral'), findsOneWidget);
   });
 

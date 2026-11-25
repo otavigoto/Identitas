@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:identitas/screens/nfc_lendo_page.dart';
+import 'package:identitas/screens/nfc_pages.dart';
 import 'package:identitas/services/nfc_service.dart';
 
 void main() {
