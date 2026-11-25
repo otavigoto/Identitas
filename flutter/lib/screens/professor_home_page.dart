@@ -2,14 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../api_client.dart';
-import '../models.dart';
-import '../professor_api.dart';
-import '../turma.dart';
-import '../turma_detalhe_page.dart';
-import '../turmas_page.dart';
-import '../turmas_api.dart';
-import 'profile_screen.dart';
+import 'package:identitas/services/api_service.dart';
+import 'package:identitas/services/models.dart';
+import 'package:identitas/screens/turma_detalhe_page.dart';
+import 'package:identitas/screens/turmas_page.dart';
+import 'package:identitas/screens/profile_screen.dart';
 
 class ProfessorHomePage extends StatefulWidget {
   const ProfessorHomePage({super.key, this.api, this.turmasApi});
