@@ -2,11 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../auth_api.dart';
-import '../login_page.dart';
-import '../models.dart';
-import '../services/nfc_service.dart';
-import '../turmas_api.dart' show ApiException;
+import 'package:identitas/services/api_service.dart';
+import 'package:identitas/screens/login_page.dart';
+import 'package:identitas/services/models.dart';
+import 'package:identitas/services/nfc_service.dart';
 
 /// Perfil de quem está logado (`GET /auth/profile`) e botão de sair.
 class ProfileScreen extends StatefulWidget {
