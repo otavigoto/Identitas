@@ -124,9 +124,9 @@ class _DisciplinasPageState extends State<DisciplinasPage> {
     return dias;
   }
 
-  Future<void> _carregar() async {
+  Future<void> _carregar({bool mostrarCarregamento = true}) async {
     setState(() {
-      _carregando = true;
+      _carregando = mostrarCarregamento;
       _erro = null;
     });
     try {
@@ -167,11 +167,14 @@ class _DisciplinasPageState extends State<DisciplinasPage> {
               362.0,
             );
 
-            return SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(horizontal, 25, horizontal, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            return RefreshIndicator(
+              onRefresh: () => _carregar(mostrarCarregamento: false),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(horizontal, 25, horizontal, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   Row(
                     children: [
                       IconButton(
@@ -322,7 +325,8 @@ class _DisciplinasPageState extends State<DisciplinasPage> {
                         },
                       ),
                     ),
-                ],
+                  ],
+                ),
               ),
             );
           },

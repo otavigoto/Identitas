@@ -34,9 +34,9 @@ class _HomePageState extends State<HomePage> {
     _carregar();
   }
 
-  Future<void> _carregar() async {
+  Future<void> _carregar({bool mostrarCarregamento = true}) async {
     setState(() {
-      _carregando = true;
+      _carregando = mostrarCarregamento;
       _erro = null;
     });
     try {
@@ -123,149 +123,156 @@ class _HomePageState extends State<HomePage> {
             return Stack(
               children: [
                 Positioned.fill(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                      horizontal,
-                      25,
-                      horizontal,
-                      112,
-                    ),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: constraints.maxWidth - horizontal * 2,
+                  child: RefreshIndicator(
+                    onRefresh: () =>
+                        _carregar(mostrarCarregamento: false),
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        25,
+                        horizontal,
+                        112,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Olá,\n$nome',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 24,
-                                        height: 0.95,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: -0.8,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 17),
-                                    const Text(
-                                      'Identitas',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 32,
-                                        height: 1,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: -1.2,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              _Avatar(onTap: _openProfile),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Próxima Aula',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              height: 1.6,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: cardWidth,
-                            height: 213,
-                            child: _NextClassCard(aula: proxima),
-                          ),
-                          const SizedBox(height: 32),
-                          SizedBox(
-                            width: cardWidth,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: constraints.maxWidth - horizontal * 2,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Expanded(
-                                  child: Text(
-                                    'Resumo de Hoje',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 20,
-                                      height: 1.6,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                Expanded(
+                                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Olá,\n$nome',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          height: 0.95,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 17),
+                      const Text(
+                        'Identitas',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          height: 1,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -1.2,
+                        ),
+                      ),
+                    ],
                                   ),
                                 ),
-                                TextButton(
-                                  key: const Key('ver-todas-aulas'),
-                                  onPressed: _openClasses,
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.white,
-                                    padding: EdgeInsets.zero,
-                                    minimumSize: Size.zero,
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  child: const Text(
-                                    'ver todas',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
+                                _Avatar(onTap: _openProfile),
                               ],
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          if (_carregando)
-                            const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(24),
-                                child: CircularProgressIndicator(
-                                  color: HomePage._accent,
-                                ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Próxima Aula',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                height: 1.6,
+                                fontWeight: FontWeight.bold,
                               ),
-                            )
-                          else if (_erro != null)
-                            _Aviso(mensagem: _erro!, onTentar: _carregar)
-                          else if (_aulas.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text(
-                                'Nenhuma aula hoje.',
-                                style: TextStyle(color: Colors.white70),
-                              ),
-                            )
-                          else
-                            Column(
-                              children: [
-                                for (final a in _aulas) ...[
-                                  SizedBox(
-                                    width: cardWidth,
-                                    child: _SummaryCard(
-                                      time: a.horario,
-                                      name: a.name,
-                                      room: a.week,
-                                      status: _statusDe(a),
-                                    ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: cardWidth,
+                              height: 213,
+                              child: _NextClassCard(aula: proxima),
+                            ),
+                            const SizedBox(height: 32),
+                            SizedBox(
+                              width: cardWidth,
+                              child: Row(
+                                mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Expanded(
+                    child: Text(
+                      'Resumo de Hoje',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        height: 1.6,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                                   ),
-                                  const SizedBox(height: 12),
+                                  TextButton(
+                    key: const Key('ver-todas-aulas'),
+                    onPressed: _openClasses,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      tapTargetSize:
+                          MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'ver todas',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                                  ),
                                 ],
-                              ],
+                              ),
                             ),
-                        ],
+                            const SizedBox(height: 12),
+                            if (_carregando)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(24),
+                                  child: CircularProgressIndicator(
+                    color: HomePage._accent,
+                                  ),
+                                ),
+                              )
+                            else if (_erro != null)
+                              _Aviso(mensagem: _erro!, onTentar: _carregar)
+                            else if (_aulas.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: Text(
+                                  'Nenhuma aula hoje.',
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                              )
+                            else
+                              Column(
+                                children: [
+                                  for (final a in _aulas) ...[
+                    SizedBox(
+                      width: cardWidth,
+                      child: _SummaryCard(
+                        time: a.horario,
+                        name: a.name,
+                        room: a.week,
+                        status: _statusDe(a),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                                  ],
+                                ],
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

@@ -68,6 +68,7 @@ class _RevisaoChamadaScreenState extends State<RevisaoChamadaScreen> {
     if (_ocupado) return;
     setState(() => _ocupado = true);
     try {
+      await widget.professorApi.abrirChamada(widget.turma.id);
       if (!_presencasAtuaisSalvas) {
         await widget.professorApi.enviarChamada(widget.turma.id, _presencas);
         _presencasSalvas = Map<String, bool>.of(_presencas);

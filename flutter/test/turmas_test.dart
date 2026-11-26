@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:identitas/screens/turmas_page.dart';
 import 'package:identitas/services/api_service.dart';
 import 'package:identitas/services/nfc_service.dart';
-import 'package:identitas/screens/turmas_page.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -50,7 +50,7 @@ class FakeBackend {
   int falhasAoFechar = 0;
   final Set<String> alunosOrfaos = {};
   final List<http.Request> requisicoes = [];
-  List<Map<String, dynamic>>? chamadaEnviada;
+  List<String>? chamadaEnviada;
 
   static Map<String, dynamic> _turma(
     String id,
@@ -163,10 +163,8 @@ class FakeBackend {
         partes.length == 4 &&
         partes[2] == 'students' &&
         partes[3] == 'attendance') {
-      chamadaEnviada = [
-        for (final item in (body['students'] as List<dynamic>))
-          (item as Map<String, dynamic>),
-      ];
+      chamadaEnviada = (body['presentStudentIds'] as List<dynamic>)
+          .cast<String>();
       return json(turma);
     }
     if (req.method == 'GET' && partes.length == 3 && partes[2] == 'students') {
@@ -272,6 +270,29 @@ void main() {
     expect(find.text('Banco de Dados'), findsOneWidget);
   });
 
+  testWidgets('recarrega as disciplinas ao puxar a tela para baixo', (
+    tester,
+  ) async {
+    await abrirLista(tester);
+
+    await tester.drag(
+      find.byKey(const Key('disciplinas-por-dia')),
+      const Offset(0, 400),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.requisicoes
+          .where(
+            (request) =>
+                request.method == 'GET' &&
+                request.url.path == '/classes/teacher/prof1',
+          )
+          .length,
+      2,
+    );
+  });
+
   testWidgets('abre gestão da disciplina e carrega frequência dos alunos', (
     tester,
   ) async {
@@ -324,7 +345,7 @@ void main() {
     expect(find.text('Faça login para continuar.'), findsOneWidget);
   });
 
-  testWidgets('revisa chamada, ajusta aluno e envia lista completa', (
+  testWidgets('revisa chamada e envia apenas os alunos presentes', (
     tester,
   ) async {
     await abrirLista(tester, nfcService: _NfcIndisponivel());
@@ -359,9 +380,20 @@ void main() {
 
     await tester.tap(find.byKey(const Key('chamada-confirmar')));
     await tester.pumpAndSettle();
-    expect(backend.chamadaEnviada, [
-      {'studentId': '24012345', 'present': true},
-      {'studentId': '24012346', 'present': false},
+    expect(backend.chamadaEnviada, ['24012345']);
+    final requisicoesDaChamada = backend.requisicoes
+        .where(
+          (request) =>
+              request.url.path.endsWith('/attendance/open') ||
+              request.url.path.endsWith('/students/attendance') ||
+              request.url.path.endsWith('/attendance/close'),
+        )
+        .toList();
+    expect(requisicoesDaChamada.map((request) => request.url.path).toList(), [
+      '/classes/1/attendance/open',
+      '/classes/1/attendance/open',
+      '/classes/1/students/attendance',
+      '/classes/1/attendance/close',
     ]);
     expect(
       backend.requisicoes.any(

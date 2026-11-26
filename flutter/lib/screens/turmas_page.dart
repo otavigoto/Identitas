@@ -42,9 +42,9 @@ class _TurmasPageState extends State<TurmasPage> {
     super.dispose();
   }
 
-  Future<void> _carregar() async {
+  Future<void> _carregar({bool mostrarCarregamento = true}) async {
     setState(() {
-      _carregando = true;
+      _carregando = mostrarCarregamento;
       _erro = null;
     });
     try {
@@ -143,54 +143,68 @@ class _TurmasPageState extends State<TurmasPage> {
         ),
       ),
       body: SafeArea(
-        child: _carregando
-            ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFFF9FF2E)),
-              )
-            : _erro != null
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _erro!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        key: const Key('tentar-novamente'),
-                        onPressed: _carregar,
-                        child: const Text('Tentar novamente'),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            : dias.isEmpty
-            ? const Center(
-                child: Text(
-                  'Nenhuma disciplina encontrada.',
-                  style: TextStyle(color: Colors.white70),
-                ),
-              )
-            : PageView.builder(
-                key: const Key('disciplinas-por-dia'),
-                controller: _pages,
-                itemCount: dias.length,
-                itemBuilder: (context, index) {
-                  final dia = dias[index];
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(6, 48, 6, 24),
-                    child: _DiaCard(
-                      dia: dia,
-                      turmas: _aulasDoDia(dia),
-                      onTap: _abrir,
+              child: RefreshIndicator(
+                onRefresh: () => _carregar(mostrarCarregamento: false),
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    SliverFillRemaining(
+                      hasScrollBody:
+                          !_carregando && _erro == null && dias.isNotEmpty,
+                      child: _carregando
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFFF9FF2E),
+                              ),
+                            )
+                          : _erro != null
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _erro!,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    FilledButton(
+                                      key: const Key('tentar-novamente'),
+                                      onPressed: () => _carregar(),
+                                      child: const Text('Tentar novamente'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          : dias.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'Nenhuma disciplina encontrada.',
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            )
+                          : PageView.builder(
+                              key: const Key('disciplinas-por-dia'),
+                              controller: _pages,
+                              itemCount: dias.length,
+                              itemBuilder: (context, index) {
+                                final dia = dias[index];
+                                return Padding(
+                                  padding: const EdgeInsets.fromLTRB(6, 48, 6, 24),
+                                  child: _DiaCard(
+                                    dia: dia,
+                                    turmas: _aulasDoDia(dia),
+                                    onTap: _abrir,
+                                  ),
+                                );
+                              },
+                            ),
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
       ),
     );

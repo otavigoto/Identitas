@@ -38,9 +38,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _carregar();
   }
 
-  Future<void> _carregar() async {
+  Future<void> _carregar({bool mostrarCarregamento = true}) async {
     setState(() {
-      _carregando = true;
+      _carregando = mostrarCarregamento;
       _erro = null;
     });
     try {
@@ -132,9 +132,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     children: [
                       Expanded(
-                        child: SingleChildScrollView(
-                          child: Column(
-                            children: [
+                        child: RefreshIndicator(
+                          onRefresh: () =>
+                              _carregar(mostrarCarregamento: false),
+                          child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            child: Column(
+                              children: [
                               _DigitalProfileCard(user: usuario),
                               const SizedBox(height: 12),
                               SizedBox(
@@ -178,7 +182,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ),
                               ],
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

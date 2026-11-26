@@ -34,9 +34,9 @@ class _ProfessorHomePageState extends State<ProfessorHomePage> {
     _carregar();
   }
 
-  Future<void> _carregar() async {
+  Future<void> _carregar({bool mostrarCarregamento = true}) async {
     setState(() {
-      _carregando = true;
+      _carregando = mostrarCarregamento;
       _erro = null;
     });
     try {
@@ -103,7 +103,7 @@ class _ProfessorHomePageState extends State<ProfessorHomePage> {
       backgroundColor: _ink,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _carregar,
+          onRefresh: () => _carregar(mostrarCarregamento: false),
           color: _ink,
           backgroundColor: _accent,
           child: ListView(

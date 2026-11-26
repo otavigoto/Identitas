@@ -24,9 +24,14 @@ class ApiConfig {
   }
 }
 
+String _dataLocal(DateTime date) {
+  final year = date.year.toString().padLeft(4, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
+}
+
 // ===== api_client =====
-
-
 
 /// Erro com mensagem pronta para mostrar ao usuário.
 class ApiException implements Exception {
@@ -316,7 +321,7 @@ class AlunoApi {
   Future<AulasDoDia> aulasDeHoje({String? data}) async => AulasDoDia.fromJson(
     await _api.get(
           '/classes/me/today',
-          query: data == null ? null : {'date': data},
+          query: {'date': data ?? _dataLocal(DateTime.now())},
         )
         as Map<String, dynamic>,
   );
@@ -359,7 +364,7 @@ class ProfessorApi {
   Future<AulasDoDia> aulasDeHoje({String? data}) async => AulasDoDia.fromJson(
     await _api.get(
           '/classes/me/today',
-          query: data == null ? null : {'date': data},
+          query: {'date': data ?? _dataLocal(DateTime.now())},
         )
         as Map<String, dynamic>,
   );
@@ -396,15 +401,14 @@ class ProfessorApi {
   Future<void> fecharChamada(String turmaId) =>
       _api.patch('/classes/$turmaId/attendance/close');
 
-  /// `POST /classes/:id/students/attendance`: envia a chamada completa.
-  /// [presencas] tem todos os alunos matriculados (`id` → presente?).
+  /// `POST /classes/:id/students/attendance`: envia apenas os presentes.
   Future<void> enviarChamada(String turmaId, Map<String, bool> presencas) =>
       _api.post(
         '/classes/$turmaId/students/attendance',
         body: {
-          'students': [
-            for (final e in presencas.entries)
-              {'studentId': e.key, 'present': e.value},
+          'presentStudentIds': [
+            for (final entry in presencas.entries)
+              if (entry.value) entry.key,
           ],
         },
       );
@@ -530,4 +534,3 @@ class TurmasApi {
     await _api.delete('/classes/$id/students/${Uri.encodeComponent(alunoId)}'),
   );
 }
-

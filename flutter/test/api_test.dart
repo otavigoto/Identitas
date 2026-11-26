@@ -141,6 +141,13 @@ void main() {
       final hoje = await aluno.aulasDeHoje();
 
       expect(hoje.aulas, isEmpty);
+      final hojeLocal = DateTime.now();
+      final dataHojeLocal = [
+        hojeLocal.year.toString().padLeft(4, '0'),
+        hojeLocal.month.toString().padLeft(2, '0'),
+        hojeLocal.day.toString().padLeft(2, '0'),
+      ].join('-');
+      expect(s.pedidos.first.url.queryParameters, {'date': dataHojeLocal});
       expect(s.pedidos.map((p) => p.url.path), [
         '/classes/me/today',
         '/auth/refresh',
@@ -329,10 +336,7 @@ void main() {
       await prof.enviarChamada('c1', {'a1': true, 'a2': false});
       expect(s.ultimo.url.path, '/classes/c1/students/attendance');
       expect(s.corpo, {
-        'students': [
-          {'studentId': 'a1', 'present': true},
-          {'studentId': 'a2', 'present': false},
-        ],
+        'presentStudentIds': ['a1'],
       });
 
       await prof.fecharChamada('c1');

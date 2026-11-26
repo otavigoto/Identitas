@@ -62,9 +62,9 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
 
   void _atualizarBusca() => setState(() {});
 
-  Future<void> _carregar() async {
+  Future<void> _carregar({bool mostrarCarregamento = true}) async {
     setState(() {
-      _carregando = true;
+      _carregando = mostrarCarregamento;
       _erro = null;
     });
     try {
@@ -298,86 +298,92 @@ class _TurmaDetalhePageState extends State<TurmaDetalhePage> {
             : Column(
                 children: [
                   Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                      children: [
-                        Text(
-                          '${_turma.name} · ${_turma.week} · ${_turma.horario}',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        _CartaoFrequencia(
-                          percentual: frequencia,
-                          matriculados: _alunos.length,
-                        ),
-                        if (_chamadaAtiva) ...[
-                          const SizedBox(height: 12),
-                          _StatusChamada(
-                            lendoNfc: _lendoNfc,
-                            presentes: _presentes,
-                            ausentes: _alunos.length - _presentes,
-                            aviso: _avisoNfc,
-                          ),
-                        ],
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            const Expanded(
-                              child: Text(
-                                'Alunos matriculados',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                    child: RefreshIndicator(
+                      onRefresh: () =>
+                          _carregar(mostrarCarregamento: false),
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                        children: [
+                          Text(
+                            '${_turma.name} · ${_turma.week} · ${_turma.horario}',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
                             ),
-                            Text(
-                              _alunos.length.toString().padLeft(2, '0'),
-                              style: const TextStyle(color: Colors.white70),
+                          ),
+                          const SizedBox(height: 14),
+                          _CartaoFrequencia(
+                            percentual: frequencia,
+                            matriculados: _alunos.length,
+                          ),
+                          if (_chamadaAtiva) ...[
+                            const SizedBox(height: 12),
+                            _StatusChamada(
+                              lendoNfc: _lendoNfc,
+                              presentes: _presentes,
+                              ausentes: _alunos.length - _presentes,
+                              aviso: _avisoNfc,
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          key: const Key('buscar-aluno-chamada'),
-                          controller: _busca,
-                          style: const TextStyle(color: Colors.black),
-                          decoration: InputDecoration(
-                            hintText: 'Buscar por nome ou RA',
-                            prefixIcon: const Icon(Icons.search),
-                            filled: true,
-                            fillColor: const Color(0xFFFEFFD9),
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 12,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide.none,
+                          const SizedBox(height: 20),
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Alunos matriculados',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                _alunos.length.toString().padLeft(2, '0'),
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            key: const Key('buscar-aluno-chamada'),
+                            controller: _busca,
+                            style: const TextStyle(color: Colors.black),
+                            decoration: InputDecoration(
+                              hintText: 'Buscar por nome ou RA',
+                              prefixIcon: const Icon(Icons.search),
+                              filled: true,
+                              fillColor: const Color(0xFFFEFFD9),
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (alunos.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 28),
-                            child: Text(
-                              'Nenhum aluno encontrado.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.white70),
-                            ),
-                          )
-                        else
-                          for (final aluno in alunos)
-                            _FrequenciaAluno(
-                              aluno: aluno,
-                              frequencia: _frequencias[aluno.id]?.percentage,
-                            ),
-                      ],
+                          const SizedBox(height: 8),
+                          if (alunos.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 28),
+                              child: Text(
+                                'Nenhum aluno encontrado.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            )
+                          else
+                            for (final aluno in alunos)
+                              _FrequenciaAluno(
+                                aluno: aluno,
+                                frequencia:
+                                    _frequencias[aluno.id]?.percentage,
+                              ),
+                        ],
+                      ),
                     ),
                   ),
                   Padding(
